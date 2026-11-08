@@ -1,0 +1,1345 @@
+{
+  "commits": {
+    "0267a9417dfe1342acbdfb8489b593ac4e6fa308": {
+      "date": "2026-08-09",
+      "message": "scsi: ufs: core: Cancel RTC work in active-active suspend\n\n[ Upstream commit f71b4a30983b846b4075bf544e835121e70e6a43 ]\n\nUFS RTC support schedules ufs_rtc_update_work to periodically update the\ndevice RTC. The work can issue query commands and access the UFS host\ncontroller.\n\nA previous change moved the RTC work cancellation before the PRE_CHANGE\nvendor suspend callback to close a race in the common suspend path.\nHowever, the active-active path jumps directly to vops_suspend after\nflushing exception handling work and therefore bypasses the\ncancellation.\n\nIf the RTC work runs while the vendor suspend callback is gating or\notherwise changing hardware state, it can access the controller during\nsuspend and trigger an SError.\n\nCancel the RTC work before entering the vendor suspend callback in the\nactive-active path. Since this path now cancels the work, move the RTC\nwork scheduling outside the device and link state restoration block in\nthe resume path. This restarts RTC updates after an active-active\nsuspend and resume cycle.\n\nFixes: b0bd84c39289 (\"scsi: ufs: core: Fix SError in ufshcd_rtc_work() during UFS suspend\")\nSigned-off-by: Guangshuo Li <lgs201920130244@gmail.com>\nReviewed-by: Peter Wang <peter.wang@mediatek.com>\nReviewed-by: Bean Huo <beanhuo@micron.com>\nReviewed-by: Bart Van Assche <bvanassche@acm.org>\nLink: https://patch.msgid.link/20260714172726.1736967-1-lgs201920130244@gmail.com\nSigned-off-by: Martin K. Petersen <martin.petersen@oracle.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "a326b19cfb7775378b50acaa8d836ba44e29b4c2"
+      ],
+      "paths": [
+        "drivers/ufs/core/ufshcd.c"
+      ],
+      "sha256": "2fe70b709362c9f59d3389a5c15d0942dc7e85230b016794c32a8bb3c34a9dfa",
+      "source": "stable",
+      "subject": "scsi: ufs: core: Cancel RTC work in active-active suspend",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "0349b7f95c806ea30d558c7fec9502f4470fb1b6": {
+      "date": "2025-07-28",
+      "message": "f2fs: avoid redundant clean nat entry move in lru list\n\n__lookup_nat_cache follows LRU manner to move clean nat entry, when nat\nentries are going to be dirty, no need to move them to tail of lru list.\nIntroduce a parameter 'for_dirty' to avoid it.\n\nSigned-off-by: wangzijie <wangzijie1@honor.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\n\n",
+      "parents": [
+        "3bf1bab503a58ed7dcfcd399c30ad0b976eb2620"
+      ],
+      "paths": [
+        "fs/f2fs/node.c"
+      ],
+      "sha256": "190f4bdd0de6d2fbe2ca800bcd6858eba330ed37e486c280390b9d39763c87e8",
+      "source": "mainline",
+      "subject": "f2fs: avoid redundant clean nat entry move in lru list",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "03cb8cc2961f5f781d12e903782cb3815ed84b1c": {
+      "date": "2026-08-27",
+      "message": "net: gro: properly validate BIG TCP aggregation criteria\n\nWhen GRO attempts to aggregate packets beyond GRO_LEGACY_MAX_SIZE (64KB),\nBIG TCP should only be permitted for plain IPv4 TCP and plain IPv6 TCP\n(with sufficient MAC header room to insert the temporary HBH jumbo header).\n\nHowever, commit b1a78b9b9886 (\"net: add support for ipv4 big tcp\")\nloosened the check in skb_gro_receive(), leading to several issues:\n\n1. skb_gro_receive() checked skb_headroom(p) instead of the actual space\n   before the MAC header (p->mac_header). Because skb_headroom(p) includes\n   mac_len, crafted frames (e.g. injected via AF_PACKET) can pass the check\n   with p->mac_header < 8 bytes. When ipv6_gro_complete() inserts the\n   temporary HBH jumbo header, the memmove() starts before skb->head,\n   causing an out-of-bounds write and wrapping skb->mac_header.\n2. It allowed non-IP protocols such as software VLAN (ETH_P_8021Q /\n   ETH_P_8021AD) to aggregate beyond 64KB because\n   p->protocol != ETH_P_IPV6 was true.\n3. It checked p->encapsulation instead of NAPI_GRO_CB(skb)->encap_mark,\n   allowing encapsulated flows (e.g. SIT / IPv6-in-IPv4) to aggregate\n   beyond 64KB.\n\nFix skb_gro_receive() to strictly enforce:\n- NAPI_GRO_CB(skb)->proto == IPPROTO_TCP\n- Not encapsulated (!NAPI_GRO_CB(skb)->encap_mark && !p->encapsulation)\n- Protocol must be either ETH_P_IP or ETH_P_IPV6\n- If ETH_P_IPV6, p->mac_header must be at least\n  sizeof(struct hop_jumbo_hdr)\n\nReturning -E2BIG from skb_gro_receive() ensures that packets which cannot\nbecome BIG TCP are cleanly flushed at <= 64KB and delivered intact without\ndropping.\n\nThis issue does not exist in mainline (7.0+) because the subsystem was\nrewritten in commit 81be30c1f5f2 (\"net/ipv6: Drop HBH for BIG TCP on RX\nside\"), making this fix relevant only for older stable branches like\n6.18.y.\n\nFixes: 0fe79f28bfaf (\"net: allow gro_max_size to exceed 65536\")\nFixes: b1a78b9b9886 (\"net: add support for ipv4 big tcp\")\nReported-by: Sam Dlinn <sledge@meta.com>\nCc: stable@vger.kernel.org\nSigned-off-by: Eric Dumazet <edumazet@google.com>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "7733b01ed13685773ccda91035a46f87d4cfef7c"
+      ],
+      "paths": [
+        "net/core/gro.c"
+      ],
+      "sha256": "2343a117ca01c18e0d136daed099d4c22bda9a180480c1e162b276dd9567d3d3",
+      "source": "stable",
+      "subject": "net: gro: properly validate BIG TCP aggregation criteria",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "0504d52d05299c1177f2086884343430cdca1f5c": {
+      "date": "2026-08-09",
+      "message": "cpufreq: schedutil: Publish util hooks only after all sg_cpu are initialized\n\ncommit f0a3f042293a8c5a2152346b3637ea60866c503a upstream.\n\nCommit 16a03c71bba0 (\"cpufreq: schedutil: Merge initialization code of\nsg_cpu in single loop\") merged the per-CPU initialization and the\nutilization-hook registration into a single loop in sugov_start().\n\nFor a shared cpufreq policy this re-introduces the race originally fixed\nby commit ab2f7cf141aa (\"cpufreq: schedutil: Fix sugov_start() versus\nsugov_update_shared() race\").\n\nThe scheduler's util path reaches the hook under RCU-sched and never takes\npolicy->rwsem, so the rwsem held across sugov_start() cannot serialize the\ntwo. Once the first CPU's hook is published, sugov_update_shared() may run\nand, via sugov_next_freq_shared(), read/write each sibling sugov_cpu\n(iowait_boost, util, bw_min, ...) concurrently with the memset() still\ninitializing them, with no lock common to both sides: the update side holds\nsg_policy->update_lock while the init side holds only policy->rwsem, which\nthe scheduler's util path never takes.\n\nThe walk only accesses scalar members, never a pointer like ->sg_policy,\nso it does not crash today; it merely uses stale (or zero on first start)\nvalues that skew the frequency selection and tracepoints. It is still a\ngenuine data race, and a latent crash once any pointer member is\ndereferenced there.\n\nRestore the two-phase approach: initialize all per-CPU structures first,\nand only then publish the per-CPU utilization update hooks.\n\nFixes: 16a03c71bba0 (\"cpufreq: schedutil: Merge initialization code of sg_cpu in single loop\")\nCc: stable@vger.kernel.org\nSigned-off-by: Zhongqiu Han <zhongqiu.han@oss.qualcomm.com>\nReviewed-by: Christian Loehle <christian.loehle@arm.com>\nLink: https://patch.msgid.link/20260716115159.848403-1-zhongqiu.han@oss.qualcomm.com\nSigned-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "176a5e991f73e24c50548b5cab335b3a25aefa45"
+      ],
+      "paths": [
+        "kernel/sched/cpufreq_schedutil.c"
+      ],
+      "sha256": "70513e0879c0bd1339163ef74fc96c21c15786e351ac39f791dee2548a4fa79f",
+      "source": "stable",
+      "subject": "cpufreq: schedutil: Publish util hooks only after all sg_cpu are initialized",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "07b3b83587fb3012619f4439389b64a955fc7836": {
+      "date": "2026-06-19",
+      "message": "timers/migration: Fix livelock in tmigr_handle_remote_up()\n\ncommit d486b4934a8e504376b85cdb3766f306d57aff5b upstream.\n\ntmigr_handle_remote_cpu() skips timer_expire_remote() when cpu ==\nsmp_processor_id(), assuming the local softirq path already handled this\nCPU's timers.\n\nThis assumption is wrong because jiffies can advance after the handling of\nthe CPU's global timers in run_timer_base(BASE_GLOBAL) and before\ntmigr_handle_remote() evaluates the expiry times.\n\nAs a consequence a timer which expires after the CPU local timer wheel\nadvanced and becomes expired in the remote handling is ignored and the\ncallback is never invoked and removed from the timer wheel.\n\nWhat's worse is that fetch_next_timer_interrupt_remote() keeps reporting it\nas expired, and the event is re-queued with expires == now on each\niteration.  The goto-again loop spins indefinitely.\n\nFix this by calling timer_expire_remote() unconditionally. That's minimal\noverhead for the common case as __run_timer_base() returns immediately if\nthere is nothing to expire in the local wheel.\n\n[ tglx: Amend change log and add a comment ]\n\nFixes: 7ee988770326 (\"timers: Implement the hierarchical pull model\")\nReported-by: Alon Kariv <alonka@amazon.com>\nSigned-off-by: Amit Matityahu <amitmat@amazon.com>\nSigned-off-by: Thomas Gleixner <tglx@kernel.org>\nCc: stable@vger.kernel.org\nLink: https://patch.msgid.link/20260603170139.33628-1-amitmat@amazon.com\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "bcb275626055df7f8f947f1a349754b4004d9a15"
+      ],
+      "paths": [
+        "kernel/time/timer_migration.c"
+      ],
+      "sha256": "19e4904a95199b7ca419b8aa49c0c5028d3cf557322863fa77f87f8937fd887f",
+      "source": "stable",
+      "subject": "timers/migration: Fix livelock in tmigr_handle_remote_up()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "0ae1ac7335ca2328c42fbbe2b71bc9c3fc8e65d9": {
+      "date": "2025-10-27",
+      "message": "tcp: remove one ktime_get() from recvmsg() fast path\n\nEach time some payload is consumed by user space (recvmsg() and friends),\nTCP calls tcp_rcv_space_adjust() to run DRS algorithm to check\nif an increase of sk->sk_rcvbuf is needed.\n\nThis function is based on time sampling, and currently calls\ntcp_mstamp_refresh(tp), which is a wrapper around ktime_get_ns().\n\nktime_get_ns() has a high cost on some platforms.\n100+ cycles for rdtscp on AMD EPYC Turin for instance.\n\nWe do not have to refresh tp->tcp_mpstamp, using the last cached value\nis enough. We only need to refresh it from __tcp_cleanup_rbuf()\nif an ACK must be sent (this is a rare event).\n\nSigned-off-by: Eric Dumazet <edumazet@google.com>\nReviewed-by: Kuniyuki Iwashima <kuniyu@google.com>\nLink: https://patch.msgid.link/20251024120707.3516550-1-edumazet@google.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\n\n",
+      "parents": [
+        "6f147c8328e045de3a35155ca7c883d88da9e916"
+      ],
+      "paths": [
+        "net/ipv4/tcp.c",
+        "net/ipv4/tcp_input.c"
+      ],
+      "sha256": "518c81da8a1857e173bd783b0c6587b39a00d005df6938fd187f7c8d451e59cd",
+      "source": "aosp",
+      "subject": "tcp: remove one ktime_get() from recvmsg() fast path",
+      "url": "https://android.googlesource.com/kernel/common"
+    },
+    "0fe4636665d14a258de70b4f3e8248e6d42038f1": {
+      "date": "2026-08-23",
+      "message": "tcp: challenge ACK for non-exact RST in SYN-RECEIVED\n\n[ Upstream commit a28c4fcbf774e23b4779cae468e3497a5ad1f4a1 ]\n\nThe SYN-RECEIVED request-socket path in tcp_check_req() accepts an\nin-window RST without requiring SEG.SEQ to exactly match RCV.NXT.  A\nnon-exact RST therefore removes the request instead of eliciting a\nchallenge ACK.\n\nRFC 9293 section 3.10.7.4 applies the RFC 5961 reset check in\nSYN-RECEIVED: an exact RST resets the connection, while a non-exact\nin-window RST must trigger a challenge ACK and be dropped.\n\nApply that check before the ACK-field validation, following the RFC\nsequence-number, RST, then ACK processing order.  Factor the per-netns\nchallenge ACK quota out of tcp_send_challenge_ack() so request sockets\ncan share it.  Use the request socket's send_ack() callback and its own\nout-of-window ACK timestamp to send and rate-limit the response.\n\nReported-by: Yuxiang Yang <yangyx22@mails.tsinghua.edu.cn>\nReported-by: Yizhou Zhao <zhaoyz24@mails.tsinghua.edu.cn>\nReported-by: Ao Wang <wangao@seu.edu.cn>\nReported-by: Xuewei Feng <fengxw06@126.com>\nReported-by: Qi Li <qli01@tsinghua.edu.cn>\nReported-by: Ke Xu <xuke@tsinghua.edu.cn>\nFixes: 282f23c6ee34 (\"tcp: implement RFC 5961 3.2\")\nCc: stable@vger.kernel.org\nSigned-off-by: Yuxiang Yang <yangyx22@mails.tsinghua.edu.cn>\nReviewed-by: Eric Dumazet <edumazet@google.com>\nLink: https://patch.msgid.link/20260717081443.809393-2-yangyx22@mails.tsinghua.edu.cn\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "d598eecb16159d3de50c2bdefc43fbaebbbba91a"
+      ],
+      "paths": [
+        "include/net/tcp.h",
+        "net/ipv4/tcp_input.c",
+        "net/ipv4/tcp_minisocks.c"
+      ],
+      "sha256": "27a596fddc73db5ad63ede803f530bbed43203d1282144c771699c9cbd50ede3",
+      "source": "stable",
+      "subject": "tcp: challenge ACK for non-exact RST in SYN-RECEIVED",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "1509c1ae9185ec7103899967ed788b6eebab3fcc": {
+      "date": "2026-08-23",
+      "message": "bpf: Fix linked reg delta tracking when src_reg == dst_reg\n\ncommit d7f14173c0d5866c3cae759dee560ad1bed10d2e upstream.\n\nConsider the case of rX += rX where src_reg and dst_reg are pointers to\nthe same bpf_reg_state in adjust_reg_min_max_vals(). The latter first\nmodifies the dst_reg in-place, and later in the delta tracking, the\nsubsequent is_reg_const(src_reg)/reg_const_value(src_reg) reads the\npost-{add,sub} value instead of the original source.\n\nThis is problematic since it sets an incorrect delta, which sync_linked_regs()\nthen propagates to linked registers, thus creating a verifier-vs-runtime\nmismatch. Fix it by just skipping this corner case.\n\nFixes: 98d7ca374ba4 (\"bpf: Track delta between \"linked\" registers.\")\nReported-by: STAR Labs SG <info@starlabs.sg>\nSigned-off-by: Daniel Borkmann <daniel@iogearbox.net>\nLink: https://lore.kernel.org/r/20260407192421.508817-1-daniel@iogearbox.net\nSigned-off-by: Alexei Starovoitov <ast@kernel.org>\n[shung-hsi.yu: contextual difference due to commit 7a433e519364 (\"bpf: Support\nnegative offsets, BPF_SUB, and alu32 for linked register tracking\") not\nbackported. ]\nSigned-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "1a0ae4d502062a2759f2a92d12bdeab3c64c7372"
+      ],
+      "paths": [
+        "kernel/bpf/verifier.c"
+      ],
+      "sha256": "ab35e8e1a1ed348d4f9ae6d87cc184fadbf6d75e74303032f9086dae56055f49",
+      "source": "stable",
+      "subject": "bpf: Fix linked reg delta tracking when src_reg == dst_reg",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "157c0a896127d16466d69729a3e140c29dfbf239": {
+      "date": "2026-07-24",
+      "message": "netfilter: ipset: annotate \"pos\" for concurrent readers/writers\n\n[ Upstream commit 7f7445840b7771338618930e45ee641104b38ed8 ]\n\nThe \"pos\" structure member of struct hbucket stores the first\nfree slot in the hash bucket of a hash type of set and there\nare concurrent readers/writers. Annotate accesses properly.\n\nFixes: 18f84d41d34f (\"netfilter: ipset: Introduce RCU locking in hash:* types\")\nSigned-off-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nStable-dep-of: e4b4984e28c1 (\"netfilter: ipset: Don't use test_bit() in lockless RCU readers in hash types\")\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "7e06a41b36638d514638de468428c14ae79db475"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_hash_gen.h"
+      ],
+      "sha256": "8a4a240e479b17361fe37ee77c14a03cb28f4d4e08161ec9031474b47a9cc049",
+      "source": "stable",
+      "subject": "netfilter: ipset: annotate \"pos\" for concurrent readers/writers",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "16161444c30d8dff9428abbae42b72ce4e32a932": {
+      "date": "2026-07-04",
+      "message": "f2fs: validate compress cache inode only when enabled\n\ncommit 5073c66a96a9c23c0c2533ed4ed06e42f9021208 upstream.\n\nF2FS_COMPRESS_INO() uses NM_I(sbi)->max_nid as the synthetic inode\nnumber for the compressed page cache inode. That inode only exists when\nthe compress_cache mount option is enabled.\n\nWhen compress_cache is disabled, max_nid is outside the valid inode\nrange. A corrupted directory entry that points to ino == max_nid should\ntherefore be rejected by f2fs_check_nid_range(). However, is_meta_ino()\ncurrently treats F2FS_COMPRESS_INO() as a meta inode unconditionally,\nso f2fs_iget() bypasses do_read_inode() and its nid range check, and\ninstantiates a fake internal inode instead.\n\nGate the compressed cache inode case on COMPRESS_CACHE, matching\nf2fs_init_compress_inode(). With compress_cache disabled, ino ==\nmax_nid now follows the normal inode path and is rejected as an\nout-of-range nid.\n\nCc: stable@kernel.org\nFixes: 6ce19aff0b8c (\"f2fs: compress: add compress_inode to cache compressed blocks\")\nSigned-off-by: Wenjie Qi <qiwenjie@xiaomi.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "2b100a6089acf44884bcd93bad205c8bc3c1ec5b"
+      ],
+      "paths": [
+        "fs/f2fs/inode.c"
+      ],
+      "sha256": "cb463a86b80e2dfc7c3ba9be9330df87d19dff2beca8abf5a0ba5fd9ceaaef39",
+      "source": "stable",
+      "subject": "f2fs: validate compress cache inode only when enabled",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "165258303357e54b75fc19b341ae2a2b7c9e3910": {
+      "date": "2026-07-24",
+      "message": "ipv4: igmp: Fix potential UAF in igmp_gq_start_timer()\n\n[ Upstream commit 7b19c0f81ed1fdaec6bc522569be367199a9edf3 ]\n\nA race condition exists between device teardown (inetdev_destroy) and\nincoming IGMP query processing (igmp_rcv), leading to a Use-After-Free\nin the IGMP timer callback.\n\nDuring device destruction, inetdev_destroy() drops the primary reference\nto in_device, which can drop its refcount to 0. The actual freeing of\nin_device memory is deferred via RCU (using call_rcu()).\n\nConcurrently, igmp_rcv() runs under RCU read lock and obtains the\nin_device pointer. Because the memory is RCU-protected, CPU-0 can safely\ndereference in_device even if its refcount has hit 0.\n\nHowever, if CPU-0 calls igmp_gq_start_timer() and re-arms the timer, it\nattempts to acquire a reference using in_dev_hold(). This increments the\nrefcount from 0 to 1, triggering a \"refcount_t: addition on 0\" warning.\nSince the in_device memory is still scheduled to be freed after the RCU\ngrace period (as the free callback does not check the refcount again),\nthe device is freed while the timer is still armed. When the timer\nexpires, it accesses the freed memory, causing a kernel panic.\n\nFix this by using refcount_inc_not_zero() (via a new helper\nin_dev_hold_safe()) to prevent acquiring a reference if the device is\nalready being destroyed. If the refcount is 0, we do not arm the timer.\n\nA similar issue in IPv6 MLD is fixed in a subsequent patch.\n\nFixes: 1da177e4c3f4 (\"Linux-2.6.12-rc2\")\nReported-by: Zero Day Initiative <zdi-disclosures@trendmicro.com>\nSigned-off-by: Eric Dumazet <edumazet@google.com>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260705181756.963063-2-edumazet@google.com\nSigned-off-by: Paolo Abeni <pabeni@redhat.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "3649b04f86b95243fa0c845695051455fa2ba40b"
+      ],
+      "paths": [
+        "include/linux/inetdevice.h",
+        "net/ipv4/igmp.c"
+      ],
+      "sha256": "0294774e7852ba28b20e2357ae3b02dcb9719c133985db3d195aa587cec3c487",
+      "source": "stable",
+      "subject": "ipv4: igmp: Fix potential UAF in igmp_gq_start_timer()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "192df376a05c2db15564640f9da7e20907c1fa24": {
+      "date": "2026-06-19",
+      "message": "ipv6: Fix a potential NPD in cleanup_prefix_route()\n\n[ Upstream commit b70c687b7cf267fb08586667a3946c8851cad672 ]\n\naddrconf_get_prefix_route() can return the fib6_null_entry sentinel\nentry which has a NULL fib6_table pointer. Therefore, before setting the\nroute's expiration time, check that we are not working with this entry,\nas otherwise a NPD will be triggered [1].\n\nNote that the other callers of addrconf_get_prefix_route() are not\nsusceptible to this bug:\n\n1. addrconf_prefix_rcv(): Requests a route with the 'RTF_ADDRCONF |\n   RTF_PREFIX_RT' flags which are not set on fib6_null_entry.\n\n2. modify_prefix_route(): Fixed by commit a747e02430df (\"ipv6: avoid\n   possible NULL deref in modify_prefix_route()\").\n\n3. __ipv6_ifa_notify(): Calls ip6_del_rt() which specifically checks for\n   fib6_null_entry and returns an error.\n\n[1]\nOops: general protection fault, probably for non-canonical address 0xdffffc0000000006: 0000 [#1] SMP KASAN\nKASAN: null-ptr-deref in range [0x0000000000000030-0x0000000000000037]\n[...]\nCall Trace:\n<TASK>\n__kasan_check_byte (mm/kasan/common.c:573)\nlock_acquire.part.0 (kernel/locking/lockdep.c:5842 (discriminator 1))\n_raw_spin_lock_bh (kernel/locking/spinlock.c:182 (discriminator 1))\ncleanup_prefix_route (net/ipv6/addrconf.c:1280)\nipv6_del_addr (net/ipv6/addrconf.c:1342)\ninet6_addr_del.isra.0 (net/ipv6/addrconf.c:3119)\ninet6_rtm_deladdr (net/ipv6/addrconf.c:4812)\nrtnetlink_rcv_msg (net/core/rtnetlink.c:6997)\nnetlink_rcv_skb (net/netlink/af_netlink.c:2555)\nnetlink_unicast (net/netlink/af_netlink.c:1344)\nnetlink_sendmsg (net/netlink/af_netlink.c:1899)\n__sock_sendmsg (net/socket.c:802 (discriminator 4))\n____sys_sendmsg (net/socket.c:2698)\n___sys_sendmsg (net/socket.c:2752)\n__sys_sendmsg (net/socket.c:2784)\ndo_syscall_64 (arch/x86/entry/syscall_64.c:63 arch/x86/entry/syscall_64.c:94)\nentry_SYSCALL_64_after_hwframe (arch/x86/entry/entry_64.S:121)\n\nFixes: 5eb902b8e719 (\"net/ipv6: Remove expired routes with a separated list of routes.\")\nReported-by: Ji'an Zhou <eilaimemedsnaimel@gmail.com>\nReviewed-by: David Ahern <dahern@nvidia.com>\nSigned-off-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260609145448.768318-1-idosch@nvidia.com\nSigned-off-by: Paolo Abeni <pabeni@redhat.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "48bf2b2772dd397bdb807960bb5542742b88212a"
+      ],
+      "paths": [
+        "net/ipv6/addrconf.c"
+      ],
+      "sha256": "d72969a59ed2200e2a482429f2b5f9b60cfa6bcb9e6fd5127ee8777d1b12d489",
+      "source": "stable",
+      "subject": "ipv6: Fix a potential NPD in cleanup_prefix_route()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "19999e479c2a38672789e66b4830f43c645ca1f2": {
+      "date": "2026-04-18",
+      "message": "mm: remove '!root_reclaim' checking in should_abort_scan()\n\nAndroid systems usually use memory.reclaim interface to implement user\nspace memory management which expects that the requested reclaim target\nand actually reclaimed amount memory are not diverging by too much. With\nthe current MGRLU implementation there is, however, no bail out when the\nreclaim target is reached and this could lead to an excessive reclaim\nthat scales with the reclaim hierarchy size.For example, we can get a\nnr_reclaimed=394/nr_to_reclaim=32 proactive reclaim under a common 1-N\ncgroup hierarchy.\n\nThis defect arose from the goal of keeping fairness among memcgs that is,\nfor try_to_free_mem_cgroup_pages -> shrink_node_memcgs -> shrink_lruvec ->\nlru_gen_shrink_lruvec -> try_to_shrink_lruvec, the !root_reclaim(sc) check\nwas there for reclaim fairness, which was necessary before commit\nb82b530740b9 (\"mm: vmscan: restore incremental cgroup iteration\") because\nthe fairness depended on attempted proportional reclaim from every memcg\nunder the target memcg.  However after commit b82b530740b9 there is no\nlonger a need to visit every memcg to ensure fairness.  Let's have\ntry_to_shrink_lruvec bail out when the nr_reclaimed achieved.\n\nLink: https://lore.kernel.org/20260318011558.1696310-1-zhaoyang.huang@unisoc.com\nLink: https://lore.kernel.org/20260212032111.408865-1-zhaoyang.huang@unisoc.com\nSigned-off-by: Zhaoyang Huang <zhaoyang.huang@unisoc.com>\nSuggested-by: T.J.Mercier <tjmercier@google.com>\nReviewed-by: T.J. Mercier <tjmercier@google.com>\nAcked-by: Shakeel Butt <shakeel.butt@linux.dev>\nAcked-by: Qi Zheng <qi.zheng@linux.dev>\nReviewed-by: Barry Song <baohua@kernel.org>\nReviewed-by: Kairui Song <kasong@tencent.com>\nCc: Johannes Weiner <hannes@cmpxchg.org>\nCc: Michal Hocko <mhocko@kernel.org>\nCc: Rik van Riel <riel@surriel.com>\nCc: Roman Gushchin <roman.gushchin@linux.dev>\nCc: Yu Zhao <yuzhao@google.com>\nCc: Axel Rasmussen <axelrasmussen@google.com>\nCc: Yuanchu Xie <yuanchu@google.com>\nCc: Wei Xu <weixugc@google.com>\nSigned-off-by: Andrew Morton <akpm@linux-foundation.org>\n\n",
+      "parents": [
+        "77c368f057e17b59b23899a1907ee9d4f4d7a532"
+      ],
+      "paths": [
+        "mm/vmscan.c"
+      ],
+      "sha256": "b72d0f4e382326708a9b5759dfe24bc1153141401f26137cc058a3ee56778cc1",
+      "source": "mainline",
+      "subject": "mm: remove '!root_reclaim' checking in should_abort_scan()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "1c206d461c680c3151daa3c89fc26eaf5bf98a7f": {
+      "date": "2026-08-19",
+      "message": "ipv6: prevent in6_dev_get() from resurrecting inet6_dev\n\ncommit 0e243671bc7b8eaf00f83dd2f4367436dc0cff98 upstream.\n\nin6_dev_get() reads dev->ip6_ptr under RCU and then unconditionally\nincrements its refcount. Device teardown can clear the pointer and drop\nthe last reference between these operations. The increment then\nresurrects an object whose RCU free has already been queued, so callers\ncan use it after it is freed.\n\nUse refcount_inc_not_zero() and return NULL when the object has already\nreached zero. RCU keeps the memory accessible through the attempted\nreference acquisition, and a successful increment pins the object for\nthe caller.\n\nAn independent run on the exact unpatched 6f5156d7a31a (v7.2-rc3)\nkernel reproduced the invalid reference acquisition as UID 1000:\n\n  refcount_t: addition on 0; use-after-free.\n  ip6_mc_source+0xef4/0x17e0\n\nIt was followed by the corresponding reference underflow in\nip6_mc_source(). The supplied trace from the same unpatched revision\nadditionally shows the access after the RCU read-side section ends:\n\n  BUG: KASAN: slab-use-after-free in mutex_lock+0x76/0xe0\n  Write of size 8 at addr ffff888015b50240 by task poc/1219\n\nBug found and triaged by OpenAI Security Research and\nvalidated by Trail of Bits.\n\nFixes: 8814c4b53381 (\"[IPV6] ADDRCONF: Convert addrconf_lock to RCU.\")\nCc: stable@vger.kernel.org\nSigned-off-by: Kyle Zeng <kylebot@openai.com>\nCo-developed-by: David Lee <david.lee@trailofbits.com>\nSigned-off-by: David Lee <david.lee@trailofbits.com>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260803122758.666112-1-david.lee@trailofbits.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "ca8342b5fc24c249fdb998468f6a168b457c67e5"
+      ],
+      "paths": [
+        "include/net/addrconf.h"
+      ],
+      "sha256": "a12f920f7304beef7af1458a9c94f657071f42ec55221985978c0caf4fd75017",
+      "source": "stable",
+      "subject": "ipv6: prevent in6_dev_get() from resurrecting inet6_dev",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "20cb13a523f0a05cb2d0a7d72abae687683712e0": {
+      "date": "2026-08-23",
+      "message": "netfilter: ipset: fix refcount race between list:set GC and swap\n\n[ Upstream commit 0c88868271653537ed443272dd8e7d13634d214b ]\n\n__ip_set_put_byindex() resolved the index to a set pointer under RCU,\nthen took ip_set_ref_lock in __ip_set_put() to decrement set->ref.\nip_set_swap() holds that same lock while swapping both the ip_set_list\nslots and the two sets' ref counters, so it can interleave between the\ndereference and the lock acquisition, leaving the caller to decrement a\nset whose reference already moved to the other index and hit\nBUG_ON(set->ref == 0). list_set_gc() reaches this from timer softirq,\nwhich the nfnl mutex does not serialize against swap: an expiring\nlist:set member calls list_set_del() -> ip_set_put_byindex() while\nIPSET_CMD_SWAP runs on the referenced sets.\n\nResolve the index and decrement under ip_set_ref_lock, as ip_set_swap()\nalready does, keeping the refcount tied to the index rather than to a\nstale set pointer.\n\n  kernel BUG at net/netfilter/ipset/ip_set_core.c:685!\n  Oops: invalid opcode: 0000 [#1] SMP KASAN NOPTI\n  RIP: 0010:ip_set_put_byindex (net/netfilter/ipset/ip_set_core.c:870)\n  Call Trace:\n   <IRQ>\n   list_set_del (net/netfilter/ipset/ip_set_list_set.c:159)\n   set_cleanup_entries (net/netfilter/ipset/ip_set_list_set.c:181)\n   list_set_gc (net/netfilter/ipset/ip_set_list_set.c:578)\n   call_timer_fn (kernel/time/timer.c:1748)\n   __run_timers (kernel/time/timer.c:1799 kernel/time/timer.c:2374)\n   run_timer_softirq (kernel/time/timer.c:2405)\n   </IRQ>\n  Kernel panic - not syncing: Fatal exception in interrupt\n\nFixes: 9076aea76538 (\"netfilter: ipset: Increase the number of maximal sets automatically\")\nReported-by: AutonomousCodeSecurity@microsoft.com\nSigned-off-by: Xiang Mei (Microsoft) <xmei5@asu.edu>\nAcked-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "cd6991001bf0681ed0bcf21f9cc3d261d749b2bb"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_core.c"
+      ],
+      "sha256": "8613ad5e92d7bcb0e149a875153b98de40ef2f2d81bfd6bf72be9bbd8260407f",
+      "source": "stable",
+      "subject": "netfilter: ipset: fix refcount race between list:set GC and swap",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "222bc257a151cc1b01d926199a0d5a7ba61d2e53": {
+      "date": "2026-06-22",
+      "message": "f2fs: skip inode folio lookup for cached overwrite\n\nprepare_write_begin() first gets the inode folio and builds a dnode,\nthen checks the read extent cache. For an ordinary overwrite of a\nnon-inline and non-compressed file, an extent-cache hit already gives the\ndata block address and the following path does not need to allocate or\nupdate any node state.\n\nCheck the read extent cache before fetching the inode folio for that\nnarrow case. Keep the existing paths for inline data, compressed files,\nand writes that may extend past EOF, where the helper may need inline\nconversion, compression preparation, or block reservation.\n\nThis avoids a node-folio lookup in the buffered overwrite fast path when\nthe mapping is already cached.\n\nIn a QEMU/KASAN x86_64 VM, using a small buffered overwrite workload on\nan existing 1MiB file, median time improved as follows:\n\n  64-byte overwrites:  1724.93 ns/write -> 1560.24 ns/write\n  256-byte overwrites: 1713.38 ns/write -> 1577.85 ns/write\n\nFunction profiling of 20k 64-byte overwrites showed\nf2fs_get_inode_folio() calls drop from 20004 to 4.\n\nSigned-off-by: Wenjie Qi <qiwenjie@xiaomi.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\n\n",
+      "parents": [
+        "6d874b65aadce56ac78f76129dbcfc2599b638f8"
+      ],
+      "paths": [
+        "fs/f2fs/data.c"
+      ],
+      "sha256": "c1e7ed42c533360d8f1b925f51ef21fff2e271e0cf88f2c68a7c3c7349af339b",
+      "source": "mainline",
+      "subject": "f2fs: skip inode folio lookup for cached overwrite",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "23d8ea1e303b5f32d883757a4a707e791dbc9808": {
+      "date": "2026-08-19",
+      "message": "blk-mq: pop cached request if it is usable\n\n[ Upstream commit dc278e9bf2b9513a763353e6b9cc21e0f532954e ]\n\nWhen submitting a bio to blk-mq, if the task should sleep after peeking\na cached request, but before it pops it, the plug flushes and calls\nblk_mq_free_plug_rqs, freeing the cached_rqs. This creates a\nuse-after-free bug. Fix this by popping the cached request before any\npossible blocking calls if it is suitable for use.\n\nPopping this request first holds a queue reference, so avoid any\nserialization races with queue freezes and can safely proceed with\ndispatching that request to the driver. This potentially increases a\ntiming window from when a driver wants to freeze its queue to when\nrequests stop being dispatched. That scenario is off the fast path\nthough, and drivers need to appropriately handle requests during a\nfreeze request anyway.\n\nThe downside is the popped element needs to be individually freed when\nwe performed a bio plug merge. The cached request would have had to be\nfreed later anyway, but this patch does it inline with building the plug\nlist instead of after flushing it.\n\nFixes: b0077e269f6c1 (\"blk-mq: make sure active queue usage is held for bio_integrity_prep()\")\nFixes: 7b4f36cd22a65 (\"block: ensure we hold a queue reference when using queue limits\")\nSigned-off-by: Keith Busch <kbusch@kernel.org>\nLink: https://patch.msgid.link/20260521190253.242065-1-kbusch@meta.com\nSigned-off-by: Jens Axboe <axboe@kernel.dk>\n[ fix contextual conflicts ]\nSigned-off-by: Simon Liebold <simonlie@amazon.de>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "8939dd0a8b5305f958127b20feb3fa9b54c746da"
+      ],
+      "paths": [
+        "block/blk-mq.c"
+      ],
+      "sha256": "b0e6d0a93b1fe2399a494002de5cffedc51f7cb70b2a06c3f6dbda508d634369",
+      "source": "stable",
+      "subject": "blk-mq: pop cached request if it is usable",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "29cf3b31e8cceebceed395b2a0ec7863adabca69": {
+      "date": "2026-07-24",
+      "message": "sched/fair: Fix cpu_util runnable_avg arithmetic\n\n[ Upstream commit 29922fdfc2a4008d66418bedd0ebf5038fc54efa ]\n\nIf we take runnable_avg in max(runnable_avg, util_avg) in cpu_util(), we\nshould then add or subtract task runnable_avg, but the arithmetic below\nis still with task util_avg. This mixes runnable_avg with util_avg which\nis incorrect.\n\nFix by always doing arithmetic with runnable_avg and only take\nmax(runnable_avg, util_avg) at the last step.\n\nFixes: 7d0583cf9ec7 (\"sched/fair, cpufreq: Introduce 'runnable boosting'\")\nSigned-off-by: Hongyan Xia <hongyan.xia@transsion.com>\nSigned-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>\nReviewed-by: Vincent Guittot <vincent.guittot@linaro.org>\nLink: https://patch.msgid.link/20260605094318.37931-1-hongyan.xia@transsion.com\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "d9a76eb5c879ffea25c8268951dbc34bd201bfe0"
+      ],
+      "paths": [
+        "kernel/sched/fair.c"
+      ],
+      "sha256": "71f14f0045da9e98aa75305e9cfe2ecfee15a0a83afaa951b8802544f30ae6ac",
+      "source": "stable",
+      "subject": "sched/fair: Fix cpu_util runnable_avg arithmetic",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "2a9f9791653ba5ed3fb45bbffa8d63a7cd5cf706": {
+      "date": "2026-07-18",
+      "message": "f2fs: bound i_inline_xattr_size for non-inline-xattr inodes\n\n[ Upstream commit 378acf3cf19b6af6cba55e8dd1154c4e1504bae8 ]\n\nWhen the flexible_inline_xattr feature is enabled, do_read_inode() loads\nthe on-disk i_inline_xattr_size unconditionally:\n\n\tif (f2fs_sb_has_flexible_inline_xattr(sbi))\n\t\tfi->i_inline_xattr_size = le16_to_cpu(ri->i_inline_xattr_size);\n\nbut sanity_check_inode() only range-checks it when the inode also has the\nFI_INLINE_XATTR flag set.  An inode that carries an inline dentry or inline\ndata but not FI_INLINE_XATTR -- the normal layout for an inline\ndirectory -- therefore keeps a fully attacker-controlled\ni_inline_xattr_size from a crafted image.\n\nget_inline_xattr_addrs() returns that value with no flag gating, so it\nfeeds the inode geometry:\n\n\tMAX_INLINE_DATA()  = 4 * (CUR_ADDRS_PER_INODE - i_inline_xattr_size - 1)\n\tNR_INLINE_DENTRY() = MAX_INLINE_DATA() * BITS_PER_BYTE / (...)\n\taddrs_per_page()   = CUR_ADDRS_PER_INODE - i_inline_xattr_size\n\nA large i_inline_xattr_size drives MAX_INLINE_DATA() and NR_INLINE_DENTRY()\nnegative, so make_dentry_ptr_inline() sets d->max (int) to a negative\nvalue.  The inline directory walk then compares an unsigned long bit_pos\nagainst that negative d->max, which is promoted to a huge unsigned bound,\nand reads far past the inline area:\n\n\twhile (bit_pos < d->max)\t\t/* fs/f2fs/dir.c */\n\t\t... test_bit_le(bit_pos, d->bitmap) / d->dentry[bit_pos] ...\n\nMounting a crafted image and reading such a directory triggers an\nout-of-bounds read in f2fs_fill_dentries(); the same underflow also\ncorrupts ADDRS_PER_INODE for regular files.\n\nValidate i_inline_xattr_size against MAX_INLINE_XATTR_SIZE whenever the\nflexible_inline_xattr feature is enabled -- i.e. whenever the value is\nloaded from disk and consumed -- and keep the lower MIN_INLINE_XATTR_SIZE\nbound gated on inodes that actually carry an inline xattr, so legitimate\ninodes with i_inline_xattr_size == 0 are still accepted.\n\nCc: stable@vger.kernel.org\nFixes: 6afc662e68b5 (\"f2fs: support flexible inline xattr size\")\nSigned-off-by: Bryam Vargas <hexlabsecurity@proton.me>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "56038756aae68312df00d4aa1d97e51ef3aca725"
+      ],
+      "paths": [
+        "fs/f2fs/inode.c"
+      ],
+      "sha256": "dadaf2df59e577d7d5d2b1a3973c1d954ff55db006b217e896376330fe6dcd6a",
+      "source": "stable",
+      "subject": "f2fs: bound i_inline_xattr_size for non-inline-xattr inodes",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "367abcacc13a8e2e7624408b7f593bd1e60e49d9": {
+      "date": "2026-06-19",
+      "message": "netfilter: require Ethernet MAC header before using eth_hdr()\n\n[ Upstream commit 62443dc21114c0bbc476fa62973db89743f2f137 ]\n\n`ip6t_eui64`, `xt_mac`, the `bitmap:ip,mac`, `hash:ip,mac`, and\n`hash:mac` ipset types, and `nf_log_syslog` access `eth_hdr(skb)`\nafter either assuming that the skb is associated with an Ethernet\ndevice or checking only that the `ETH_HLEN` bytes at\n`skb_mac_header(skb)` lie between `skb->head` and `skb->data`.\n\nMake these paths first verify that the skb is associated with an\nEthernet device, that the MAC header was set, and that it spans at\nleast a full Ethernet header before accessing `eth_hdr(skb)`.\n\nSuggested-by: Florian Westphal <fw@strlen.de>\nTested-by: Ren Wei <enjou1224z@gmail.com>\nSigned-off-by: Zhengchuan Liang <zcliangcn@gmail.com>\nSigned-off-by: Ren Wei <n05ec@lzu.edu.cn>\nSigned-off-by: Florian Westphal <fw@strlen.de>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "149205a18bcfb67e0856b917afeccffc0ef3e3a1"
+      ],
+      "paths": [
+        "net/ipv6/netfilter/ip6t_eui64.c",
+        "net/netfilter/ipset/ip_set_bitmap_ipmac.c",
+        "net/netfilter/ipset/ip_set_hash_ipmac.c",
+        "net/netfilter/ipset/ip_set_hash_mac.c",
+        "net/netfilter/nf_log_syslog.c",
+        "net/netfilter/xt_mac.c"
+      ],
+      "sha256": "5617b4b31a0d6eeb6429d106905c9a841277148dbf6413b8e28e286be885ccac",
+      "source": "stable",
+      "subject": "netfilter: require Ethernet MAC header before using eth_hdr()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "36e0741833bd823866f8cb9f112f37cea1a70b60": {
+      "date": "2026-08-27",
+      "message": "ipv4: reject undersized MTUs in ip_do_fragment()\n\ncommit c0726f0caf8c6b3208552949e17d23634a2f3129 upstream.\n\nip_do_fragment() subtracts the IPv4 header length from the effective\nMTU and passes the resulting payload MTU to ip_frag_next().\n\nIf the effective MTU is smaller than hlen + 8, ip_frag_next() rounds\nthe fragment payload length down to zero. The fragmentation state then\nnever makes forward progress: state->left, state->ptr and state->offset\nstay unchanged while ip_do_fragment() keeps allocating and transmitting\nheader-only fragments until the softlockup detector fires.\n\nThis is reproducible with a route installed using \"mtu lock 20\", but it\nis also reproducible without route MTU lock, for example by forwarding a\npacket to a device whose MTU is 20.\n\nFix it in ip_do_fragment() by rejecting mtu < hlen + 8 with -EMSGSIZE,\nmatching the existing IPv6 fragmentation check.\n\nFixes: 1da177e4c3f4 (\"Linux-2.6.12-rc2\")\nCc: stable@vger.kernel.org\nReported-by: Vega <vega@nebusec.ai>\nSigned-off-by: Yong Wang <edragain@163.com>\nSigned-off-by: Ren Wei <weir@nebusec.ai>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/8809ef6314b98913681b0b370a05a85c2b6cd579.1786599079.git.edragain@163.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "ee944a706a18322b4a2599eebe8040a2994e928f"
+      ],
+      "paths": [
+        "net/ipv4/ip_output.c"
+      ],
+      "sha256": "2df1badb0cdcade9491db2a7088480d9c187fadf26383e39548b8de9adedb9f3",
+      "source": "stable",
+      "subject": "ipv4: reject undersized MTUs in ip_do_fragment()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "3ec955713d9617059d2fc8f2816d0b95ace72256": {
+      "date": "2025-01-16",
+      "message": "timers: Optimize get_timer_[this_]cpu_base()\n\nIf a timer is deferrable and NO_HZ_COMMON is enabled, get_timer_cpu_base()\nand get_timer_this_cpu_base() invoke per_cpu_ptr() and this_cpu_ptr()\ntwice.\n\nWhile this seems to be cheap, get_timer_cpu_base() can be called in a loop\nin lock_timer_base().\n\nOptimize the functions by updating the base index for deferrable timers and\nretrieving the actual base pointer once.\n\nIn both cases the resulting assembly code of those helpers becomes smaller,\nwhich results in a ~30% execution time reduction for a lock_timer_base()\nmicro bench mark.\n\nSigned-off-by: Zhongqiu Han <quic_zhonhan@quicinc.com>\nSigned-off-by: Thomas Gleixner <tglx@linutronix.de>\nReviewed-by: Frederic Weisbecker <frederic@kernel.org>\nLink: https://lore.kernel.org/all/20241231150115.1978342-1-quic_zhonhan@quicinc.com\n\n\n",
+      "parents": [
+        "2d2a46cf23788a19e5450c6f9c86ab17f596c708"
+      ],
+      "paths": [
+        "kernel/time/timer.c"
+      ],
+      "sha256": "da1b3a3f0102ffb7abb56afe41e0a4e2e81d3e01c72b85da88283310cb9c777f",
+      "source": "mainline",
+      "subject": "timers: Optimize get_timer_[this_]cpu_base()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "40aa9e1223fd38e65ac72373e642c7638a3b4752": {
+      "date": "2025-07-28",
+      "message": "f2fs: directly add newly allocated pre-dirty nat entry to dirty set list\n\nWhen we need to alloc nat entry and set it dirty, we can directly add it to\ndirty set list(or initialize its list_head for new_ne) instead of adding it\nto clean list and make a move. Introduce init_dirty flag to do it.\n\nSigned-off-by: wangzijie <wangzijie1@honor.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\n\n",
+      "parents": [
+        "0349b7f95c806ea30d558c7fec9502f4470fb1b6"
+      ],
+      "paths": [
+        "fs/f2fs/node.c"
+      ],
+      "sha256": "f1fddf22222022c95f9bec49201b9e579c91abb03619a9e0acfbe23ba3ace861",
+      "source": "mainline",
+      "subject": "f2fs: directly add newly allocated pre-dirty nat entry to dirty set list",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "44480f7e3f8369671452c0d262831c51aa5a9c20": {
+      "date": "2026-07-18",
+      "message": "f2fs: fix potential deadlock in f2fs_balance_fs()\n\n[ Upstream commit dd3114870771562036fdcf5abe813956f36d224d ]\n\nWhen the f2fs filesystem space is nearly exhausted, we encounter deadlock\nissues as below:\n\nINFO: task A:1890 blocked for more than 120 seconds.\n      Tainted: G           O       6.12.41-g3fe07ddf05ab #1\n\"echo 0 > /proc/sys/kernel/hung_task_timeout_secs\" disables this message.\ntask:A    state:D stack:0     pid:1890  tgid:1626  ppid:1153   flags:0x00000204\nCall trace:\n __switch_to+0xf4/0x158\n __schedule+0x27c/0x908\n schedule+0x3c/0x118\n io_schedule+0x44/0x68\n folio_wait_bit_common+0x174/0x370\n folio_wait_bit+0x20/0x38\n folio_wait_writeback+0x54/0xc8\n truncate_inode_partial_folio+0x70/0x1e0\n truncate_inode_pages_range+0x1b0/0x450\n truncate_pagecache+0x54/0x88\n f2fs_file_write_iter+0x3e8/0xb80\n do_iter_readv_writev+0xf0/0x1e0\n vfs_writev+0x138/0x2c8\n do_writev+0x88/0x130\n __arm64_sys_writev+0x28/0x40\n invoke_syscall+0x50/0x120\n el0_svc_common.constprop.0+0xc8/0xf0\n do_el0_svc+0x24/0x38\n el0_svc+0x30/0xf8\n el0t_64_sync_handler+0x120/0x130\n el0t_64_sync+0x190/0x198\n\nINFO: task kworker/u8:11:2680853 blocked for more than 120 seconds.\n      Tainted: G           O       6.12.41-g3fe07ddf05ab #1\n\"echo 0 > /proc/sys/kernel/hung_task_timeout_secs\" disables this message.\ntask:kworker/u8:11   state:D stack:0     pid:2680853 tgid:2680853 ppid:2      flags:0x00000208\nWorkqueue: writeback wb_workfn (flush-254:0)\nCall trace:\n __switch_to+0xf4/0x158\n __schedule+0x27c/0x908\n schedule+0x3c/0x118\n io_schedule+0x44/0x68\n folio_wait_bit_common+0x174/0x370\n __filemap_get_folio+0x214/0x348\n pagecache_get_page+0x20/0x70\n f2fs_get_read_data_page+0x150/0x3e8\n f2fs_get_lock_data_page+0x2c/0x160\n move_data_page+0x50/0x478\n do_garbage_collect+0xd38/0x1528\n f2fs_gc+0x240/0x7e0\n f2fs_balance_fs+0x1a0/0x208\n f2fs_write_single_data_page+0x6e4/0x730\n f2fs_write_cache_pages+0x378/0x9b0\n f2fs_write_data_pages+0x2e4/0x388\n do_writepages+0x8c/0x2c8\n __writeback_single_inode+0x4c/0x498\n writeback_sb_inodes+0x234/0x4a8\n __writeback_inodes_wb+0x58/0x118\n wb_writeback+0x2f8/0x3c0\n wb_workfn+0x2c4/0x508\n process_one_work+0x180/0x408\n worker_thread+0x258/0x368\n kthread+0x118/0x128\n ret_from_fork+0x10/0x200\n\nINFO: task kworker/u8:8:2641297 blocked for more than 120 seconds.\n      Tainted: G           O       6.12.41-g3fe07ddf05ab #1\n\"echo 0 > /proc/sys/kernel/hung_task_timeout_secs\" disables this message.\ntask:kworker/u8:8    state:D stack:0     pid:2641297 tgid:2641297 ppid:2      flags:0x00000208\nWorkqueue: writeback wb_workfn (flush-254:0)\nCall trace:\n __switch_to+0xf4/0x158\n __schedule+0x27c/0x908\n rt_mutex_schedule+0x30/0x60\n __rt_mutex_slowlock_locked.constprop.0+0x460/0x8a8\n rwbase_write_lock+0x24c/0x378\n down_write+0x1c/0x30\n f2fs_balance_fs+0x184/0x208\n f2fs_write_inode+0xf4/0x328\n __writeback_single_inode+0x370/0x498\n writeback_sb_inodes+0x234/0x4a8\n __writeback_inodes_wb+0x58/0x118\n wb_writeback+0x2f8/0x3c0\n wb_workfn+0x2c4/0x508\n process_one_work+0x180/0x408\n worker_thread+0x258/0x368\n kthread+0x118/0x128\n ret_from_fork+0x10/0x20\n\nINFO: task B:1902 blocked for more than 120 seconds.\n      Tainted: G           O       6.12.41-g3fe07ddf05ab #1\n\"echo 0 > /proc/sys/kernel/hung_task_timeout_secs\" disables this message.\ntask:B     state:D stack:0     pid:1902  tgid:1626  ppid:1153   flags:0x0000020c\nCall trace:\n __switch_to+0xf4/0x158\n __schedule+0x27c/0x908\n rt_mutex_schedule+0x30/0x60\n __rt_mutex_slowlock_locked.constprop.0+0x460/0x8a8\n rwbase_write_lock+0x24c/0x378\n down_write+0x1c/0x30\n f2fs_balance_fs+0x184/0x208\n f2fs_map_blocks+0x94c/0x1110\n f2fs_file_write_iter+0x228/0xb80\n do_iter_readv_writev+0xf0/0x1e0\n vfs_writev+0x138/0x2c8\n do_writev+0x88/0x130\n __arm64_sys_writev+0x28/0x40\n invoke_syscall+0x50/0x120\n el0_svc_common.constprop.0+0xc8/0xf0\n do_el0_svc+0x24/0x38\n el0_svc+0x30/0xf8\n el0t_64_sync_handler+0x120/0x130\n el0t_64_sync+0x190/0x198\n\nINFO: task sync:2769849 blocked for more than 120 seconds.\n      Tainted: G           O       6.12.41-g3fe07ddf05ab #1\n\"echo 0 > /proc/sys/kernel/hung_task_timeout_secs\" disables this message.\ntask:sync            state:D stack:0     pid:2769849 tgid:2769849 ppid:736    flags:0x0000020c\nCall trace:\n __switch_to+0xf4/0x158\n __schedule+0x27c/0x908\n schedule+0x3c/0x118\n wb_wait_for_completion+0xb0/0xe8\n sync_inodes_sb+0xc8/0x2b0\n sync_inodes_one_sb+0x24/0x38\n iterate_supers+0xa8/0x138\n ksys_sync+0x54/0xc8\n __arm64_sys_sync+0x18/0x30\n invoke_syscall+0x50/0x120\n el0_svc_common.constprop.0+0xc8/0xf0\n do_el0_svc+0x24/0x38\n el0_svc+0x30/0xf8\n el0t_64_sync_handler+0x120/0x130\n el0t_64_sync+0x190/0x198\n\nThe root cause is a potential deadlock between the following tasks:\n\nkworker/u8:11\t\t\t\tThread A\n- f2fs_write_single_data_page\n - f2fs_do_write_data_page\n  - folio_start_writeback(X)\n  - f2fs_outplace_write_data\n   - bio_add_folio(X)\n - folio_unlock(X)\n\t\t\t\t\t- truncate_inode_pages_range\n\t\t\t\t\t - __filemap_get_folio(X, FGP_LOCK)\n\t\t\t\t\t - truncate_inode_partial_folio(X)\n\t\t\t\t\t  - folio_wait_writeback(X)\n - f2fs_balance_fs\n  - f2fs_gc\n   - do_garbage_collect\n    - move_data_page\n     - f2fs_get_lock_data_page\n      - __filemap_get_folio(X, FGP_LOCK)\n\nBoth threads try to access folio X. Thread A holds the lock but waits\nfor writeback, while kworker waits for the lock. This causes a deadlock.\n\nOther threads also enter D state, waiting for locks such as gc_lock and\nwritepages.\n\nOPU/IPU DATA folio are all affected by this issue. To avoid such\npotential deadlocks, always commit these cached folios before\ntriggering f2fs_gc() in f2fs_balance_fs().\n\nSuggested-by: Chao Yu <chao@kernel.org>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Ruipeng Qi <ruipengqi3@gmail.com>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nStable-dep-of: 8b4468ec023d (\"f2fs: fix potential deadlock in gc_merge path of f2fs_balance_fs()\")\nSigned-off-by: Sasha Levin <sashal@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "2a9f9791653ba5ed3fb45bbffa8d63a7cd5cf706"
+      ],
+      "paths": [
+        "fs/f2fs/data.c",
+        "fs/f2fs/f2fs.h",
+        "fs/f2fs/segment.c"
+      ],
+      "sha256": "4feee51a8e08a5b754d9d5119251d6da72cbee120439e70fb276359e4de81d10",
+      "source": "stable",
+      "subject": "f2fs: fix potential deadlock in f2fs_balance_fs()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "44e41381591dc5b4ea67a9f170b4ec85c817586e": {
+      "date": "2025-01-14",
+      "message": "block: Reorder the request allocation code in blk_mq_submit_bio()\n\nHelp the CPU branch predictor in case of a cache hit by handling the cache\nhit scenario first.\n\nReviewed-by: Damien Le Moal <dlemoal@kernel.org>\nCc: Christoph Hellwig <hch@lst.de>\nSigned-off-by: Bart Van Assche <bvanassche@acm.org>\nReviewed-by: Christoph Hellwig <hch@lst.de>\nReviewed-by: Chaitanya Kulkarni <kch@nvidia.com>\nLink: https://lore.kernel.org/r/20241218212246.1073149-2-bvanassche@acm.org\nSigned-off-by: Jens Axboe <axboe@kernel.dk>\n\n",
+      "parents": [
+        "e7b94c5c6f3b6435206f0e4ef7c5aa4eceae42f9"
+      ],
+      "paths": [
+        "block/blk-mq.c"
+      ],
+      "sha256": "1c662891cfcd54fda663be5e6f2697754c4068f35ad0edd59cfd9a5b30dc585a",
+      "source": "mainline",
+      "subject": "block: Reorder the request allocation code in blk_mq_submit_bio()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "454e00cf8ee5aff555ad5865b8c3dbf3731afcc9": {
+      "date": "2026-09-26",
+      "message": "kbuild: avoid re-running compiler and linker probes\n\nEach kernel make invocation begins with ~30 compiler and linker runs each\nof which performs duplicate probe for a number of compiler and linker\noptions.\n\nThis is useless work - the compiler and its version is known, so use these\nto determine which options are available, once.\n\nUsing the newly introduced cc-option-str, track the result of each probe in\nCC_OPT_*, LD_OPT_* variables and have Makefile's simply append the symbol.\n\nSome care has to be taken around negative options, i.e. -Wno-xxx, as gcc\naccepts an unknown -Wno- without complaint and only complains later, so\ninstead probe the positive form for these cases.\n\nUse CC_HAS_* For those probes that gate a Makefile conditional rather than\na simple option, as per the established pattern for this.\n\nThis change avoids a subtle issue with ppc32 (big endian) - clang doesn't\naccept -fno-stack-clash-protection on this sub-target, so keep this option\nin the Makefile.\n\nWith gcc and clang, defconfig and allmodconfig, the recorded command\nlines are unchanged, a build with nothing to do rebuilds nothing and W=1\ncontinues to function correctly.\n\nDoing this improves all builds, but has a particularly positive impact on\nno-op builds (builds where nothing has changed).\n\nWhole build, 128-thread Threadripper 9980X, best of N runs:\n\n                                         before   after     delta\n                                         -------------------------------\n  x86 defconfig, no-op make, gcc           0.78s    0.60s    -0.18s (-23%)\n  x86 defconfig, no-op make, clang         0.94s    0.66s    -0.28s (-30%)\n  x86 defconfig, touch mm/vma.c, gcc        8.6s     8.5s    -0.16s (-2%)\n  x86 defconfig, touch mm/vma.c, clang      8.0s     7.7s    -0.24s (-3%)\n  x86 defconfig, clean, clang              29.8s    29.4s    -0.37s (-1%)\n  x86 allmodconfig, no-op make, gcc        12.9s    12.7s    -0.23s (-2%)\n  x86 allmodconfig, no-op make, clang      14.2s    13.9s    -0.29s (-2%)\n  x86 allmodconfig, touch mm/vma.c, clang  32.2s    31.9s    -0.30s (-1%)\n\nAssisted-by: LLM\nSigned-off-by: Lorenzo Stoakes (ARM) <ljs@kernel.org>\nLink: https://patch.msgid.link/20260923-build-speedup-v4-12-73128809a4a4@kernel.org\nSigned-off-by: Nathan Chancellor <nathan@kernel.org>\n\n",
+      "parents": [
+        "f85147b291e355b34dfbe3c343c3682d488a8f07"
+      ],
+      "paths": [
+        "Makefile",
+        "arch/arm64/kernel/pi/Makefile",
+        "arch/riscv/kernel/pi/Makefile",
+        "arch/x86/Kconfig",
+        "arch/x86/Makefile",
+        "drivers/firmware/efi/libstub/Makefile",
+        "scripts/Kconfig.toolchain",
+        "scripts/Makefile.warn"
+      ],
+      "sha256": "850bfb1085c1d6dd6d29bb3ad72030ef9571bd0dfdff71c52ef41532db1c4b5b",
+      "source": "kbuild",
+      "subject": "kbuild: avoid re-running compiler and linker probes",
+      "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/kbuild/linux"
+    },
+    "4c9d9aa809c261dc0490a0e19d675f7e8e4c85bf": {
+      "date": "2026-08-19",
+      "message": "bpf, sockmap: Fix sk_redir use-after-free in send verdict\n\ncommit a76624733730e541e4955fdecf506af2f6b20558 upstream.\n\nsk_psock_msg_verdict() takes a socket reference for psock->sk_redir.\ntcp_bpf_send_verdict() copies that pointer while holding the source socket\nlock, but does not take a reference for the local copy before dropping the\nlock around tcp_bpf_sendmsg_redir().\n\nWhen apply_bytes keeps the cached verdict active, another sendmsg() on the\nsame source socket can consume the remaining bytes and release the cached\nreference while the first thread still holds only the raw local pointer:\n\n  CPU 0                                  CPU 1\n  sk_redir = psock->sk_redir\n  apply_bytes remains nonzero\n  release_sock(sk)\n                                         lock_sock(sk)\n                                         apply_bytes reaches zero\n                                         psock->sk_redir = NULL\n                                         release_sock(sk)\n                                         tcp_bpf_sendmsg_redir(sk_redir)\n                                         sock_put(sk_redir)\n  tcp_bpf_sendmsg_redir(sk_redir)\n\nThe final sock_put() can free sk_redir before CPU 0 dereferences it.\n\nKASAN reported:\n\n  BUG: KASAN: slab-use-after-free in tcp_bpf_sendmsg_redir+0xf39/0x1020\n  Read of size 8 at addr ffff888108537090 by task poc/87\n  Call Trace:\n   tcp_bpf_sendmsg_redir+0xf39/0x1020\n   tcp_bpf_sendmsg+0x977/0x1a50\n   __sys_sendto+0x32c/0x3a0\n   __x64_sys_sendto+0xdb/0x1b0\n  Allocated by task 85:\n   sk_prot_alloc+0x56/0x210\n   sk_clone+0x6f/0x14b0\n   inet_csk_clone_lock+0x24/0x740\n   tcp_create_openreq_child+0x25/0x2710\n   tcp_v4_syn_recv_sock+0x10a/0xe00\n  Freed by task 0:\n   __kasan_slab_free+0x43/0x70\n   slab_free_after_rcu_debug+0xa6/0x1e0\n   rcu_core+0x50a/0x1850\n  Last potentially related work creation:\n   __sk_destruct+0x3da/0x540\n   sk_psock_destroy+0x81e/0xab0\n   process_one_work+0x63a/0x1070\n\nTake a temporary socket reference while the source socket lock still\nprotects psock->sk_redir, and drop it after tcp_bpf_sendmsg_redir()\nreturns.  This keeps each unlocked use independent of cached-verdict\nownership.\n\nFixes: 604326b41a6f (\"bpf, sockmap: convert to generic sk_msg interface\")\nSigned-off-by: Chengfeng Ye <nicoyip.dev@gmail.com>\nReviewed-by: John Fastabend <john.fastabend@gmail.com>\nReviewed-by: Emil Tsalapatis <emil@etsalapatis.com>\nCc: stable@vger.kernel.org\nLink: https://lore.kernel.org/bpf/20260719152207.2892156-1-nicoyip.dev@gmail.com\nSigned-off-by: Kumar Kartikeya Dwivedi <memxor@gmail.com>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "b1d27e2560192908c92fc01bf5ab95b846fab782"
+      ],
+      "paths": [
+        "net/ipv4/tcp_bpf.c"
+      ],
+      "sha256": "32f357a0074b2ad5403770cfaef89e001824faa01a86d2cf7994e7a0c9df0514",
+      "source": "stable",
+      "subject": "bpf, sockmap: Fix sk_redir use-after-free in send verdict",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "5161e67c561c4f28a5d9335a6e859b02511de92b": {
+      "date": "2026-08-19",
+      "message": "udp: fix potential use-after-free in tunnel segmentation\n\n[ Upstream commit d0f86fb36eb260abd10007b62c9dcc1028e03e61 ]\n\n__skb_udp_tunnel_segment() gets the UDP header before ensuring the\ntunnel header is in the skb head. If the pull reallocates skb->head,\nthe saved UDP header pointer is no longer valid.\n\nGet the UDP header after the pull to avoid a potential use-after-free.\n\nFixes: dbef491ebe7f (\"udp: Use uh->len instead of skb->len to compute checksum in segmentation\")\nSigned-off-by: Xuanqiang Luo <luoxuanqiang@kylinos.cn>\nReviewed-by: Antoine Tenart <atenart@kernel.org>\nLink: https://patch.msgid.link/20260730093554.68127-1-xuanqiang.luo@linux.dev\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "21b8536aee819792f1b4b38b9aacf2a073025d49"
+      ],
+      "paths": [
+        "net/ipv4/udp_offload.c"
+      ],
+      "sha256": "d7d6be864f7976307698807bb22d15b3bf57f34de6b5d4eedffd79c78b235869",
+      "source": "stable",
+      "subject": "udp: fix potential use-after-free in tunnel segmentation",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "53ef70a315420ed31581d38343684b3bf9a3c76d": {
+      "date": "2026-07-24",
+      "message": "netfilter: nf_conntrack_reasm: guard mac_header adjustment after IPv6 defrag\n\ncommit 3b08fed5b7e0d5e3a25d73ef3ba09cd33ade16c9 upstream.\n\nnf_ct_frag6_reasm() slides the packet head forward to drop the IPv6\nfragment header and then unconditionally advances skb->mac_header:\n\n\tskb->mac_header += sizeof(struct frag_hdr);\n\nOn the NF_INET_LOCAL_OUT defrag path the skb has no link-layer header\nyet, so skb->mac_header is still the \"not set\" sentinel (u16)~0U. Adding\nsizeof(struct frag_hdr) wraps it to a small value (0xffff + 8 == 7),\nafter which skb_mac_header_was_set() wrongly reports a MAC header is\npresent and skb_mac_header() points into the headroom.\n\nThe reassembler has done this unconditional add since it was introduced;\nit was harmless while mac_header was a bare pointer, but wrong once\nmac_header became a u16 offset whose unset state is the ~0U sentinel\ntested by skb_mac_header_was_set(). The sibling net/ipv6/reassembly.c\ndoes the same relocation and does guard the adjustment; mirror the\nguard here.\n\nFixes: 9fb9cbb1082d (\"[NETFILTER]: Add nf_conntrack subsystem.\")\nCc: stable@vger.kernel.org\nReported-by: Weiming Shi <bestswngs@gmail.com>\nAssisted-by: Claude:claude-opus-4-8\nSigned-off-by: Xiang Mei <xmei5@asu.edu>\nSigned-off-by: Florian Westphal <fw@strlen.de>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "eae9c6ccb5af69c713a65f8ae219f5c1aa32cd17"
+      ],
+      "paths": [
+        "net/ipv6/netfilter/nf_conntrack_reasm.c"
+      ],
+      "sha256": "a59a886f1552c159370987fd30e60055a08eb6f9de0400573cc7a97582bd384c",
+      "source": "stable",
+      "subject": "netfilter: nf_conntrack_reasm: guard mac_header adjustment after IPv6 defrag",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "550511a2470f6d204fa07b331f048bd2d3c51280": {
+      "date": "2026-07-18",
+      "message": "f2fs: validate orphan inode entry count\n\n[ Upstream commit 846c499a65816d13f1186e3090e825e8bb8bcb8b ]\n\nf2fs_recover_orphan_inodes() trusts the orphan block entry_count when\nreplaying orphan inodes from the checkpoint pack. A corrupted entry_count\nlarger than F2FS_ORPHANS_PER_BLOCK makes the recovery loop read past the\nino[] array and interpret footer or following data as inode numbers.\n\nOn a crafted image, mounting an unpatched kernel can drive orphan recovery\ninto f2fs_bug_on() and panic the kernel. Validate entry_count before\nconsuming entries so corrupted checkpoint data fails the mount with\n-EFSCORRUPTED and requests fsck instead.\n\nSet ERROR_INCONSISTENT_ORPHAN as well, so the corruption reason can be\nrecorded in the superblock s_errors[] field. This gives fsck a persistent\nhint even though mount-time orphan recovery failure may leave no chance to\npersist SBI_NEED_FSCK through a checkpoint.\n\nCc: stable@kernel.org\nFixes: 127e670abfa7 (\"f2fs: add checkpoint operations\")\nSigned-off-by: Wenjie Qi <qiwenjie@xiaomi.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "c8542b68ba6ef4f61072098893a3f5b71c569b6c"
+      ],
+      "paths": [
+        "fs/f2fs/checkpoint.c",
+        "include/linux/f2fs_fs.h"
+      ],
+      "sha256": "92a52e5abc7a889c5c6ad4127dfb045b19238e498af95ba16a30c21cc96cb226",
+      "source": "stable",
+      "subject": "f2fs: validate orphan inode entry count",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "5a28a4b22dde92f9d293b94236314b8d6181dc4a": {
+      "date": "2026-08-19",
+      "message": "ipv4: fix use-after-free in fib_nhc_update_mtu()\n\ncommit bc5bde9ce3cc36502839dfe98e068f7303a50982 upstream.\n\nfib_nhc_update_mtu() walks the nexthop exception table under RTNL, but\nRTNL does not serialize this walk with PMTU exception updates. The walk\nuses rcu_dereference_protected() with a constant true condition without\nholding fnhe_lock.\n\nThe following interleaving can therefore occur:\n\n  CPU 0                              CPU 1\n  fib_nhc_update_mtu()               update_or_create_fnhe()\n    load fnhe                          spin_lock_bh(&fnhe_lock)\n                                       fnhe_remove_oldest()\n                                         unlink fnhe\n                                         kfree_rcu(fnhe, rcu)\n    <quiescent state>\n    access fnhe after grace period\n\nKASAN reported:\n\n  BUG: KASAN: slab-use-after-free in fib_nhc_update_mtu+0x3df/0x410\n  Read of size 8 at addr ffff888107d49000 by task poc/90\n  Call Trace:\n   fib_nhc_update_mtu+0x3df/0x410\n   fib_sync_mtu+0x7a/0xd0\n   fib_netdev_event+0x229/0x3f0\n   netif_set_mtu_ext+0x33a/0x570\n   dev_set_mtu+0x88/0x120\n\nThe same walk updates fnhe_pmtu and fnhe_mtu_locked. These fields form a\npair and other writers serialize them with fnhe_lock. RCU alone prevents\nreclamation, but would still allow concurrent writers to leave a mixed\npair.\n\nWalk the table under RCU and acquire fnhe_lock only while updating each\nexception. RCU keeps the current entry alive while the short critical\nsection serializes its paired PMTU fields. This avoids holding the global\nlock while scanning all 2048 buckets for every nexthop.\n\nFixes: af7d6cce5369 (\"net: ipv4: update fnhe_pmtu when first hop's MTU changes\")\nCc: stable@vger.kernel.org\nSuggested-by: Ido Schimmel <idosch@nvidia.com>\nSigned-off-by: Chengfeng Ye <nicoyip.dev@gmail.com>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260807181710.1178747-1-nicoyip.dev@gmail.com\nSigned-off-by: Paolo Abeni <pabeni@redhat.com>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "4a5dfbae5179f6574695012a980476254df2d295"
+      ],
+      "paths": [
+        "include/net/route.h",
+        "net/ipv4/fib_semantics.c",
+        "net/ipv4/route.c"
+      ],
+      "sha256": "8d5327bd98d51ac29a260dc46665f9e808fb545e26fd5029f9a6ea395699ce9e",
+      "source": "stable",
+      "subject": "ipv4: fix use-after-free in fib_nhc_update_mtu()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "5b029dd854f8a6a2f5b6b9c338ae3cc3cbfc0213": {
+      "date": "2026-07-24",
+      "message": "block: fix race in blk_time_get_ns() returning 0\n\ncommit 691b052139c94ee6640ac39e0b764dd3867897c0 upstream.\n\nblk_time_get_ns() populates the per-plug cached timestamp and then\nreturns it by re-reading the field:\n\n\tif (!plug->cur_ktime) {\n\t\tplug->cur_ktime = ktime_get_ns();\n\t\tcurrent->flags |= PF_BLOCK_TS;\n\t}\n\treturn plug->cur_ktime;\n\nThis is problematic when the compiler emits the final\n\"return plug->cur_ktime\" as a reload from memory, after PF_BLOCK_TS has\nalready been set.\n\nSince the cached timestamp is now invalidated from finish_task_switch()\n(fad156c2af22 \"block: invalidate cached plug timestamp after task\nswitch\"), a task preempted between setting PF_BLOCK_TS and that reload\nhas plug->cur_ktime zeroed by blk_plug_invalidate_ts() when it is\nscheduled back in.  The reload then returns 0.\n\nA 0 handed back here is stored as a start timestamp -- e.g.\nblk_account_io_start() writes it to rq->start_time_ns -- and later\nsubtracted from \"now\".  blk_account_io_done() then adds (now - 0), i.e.\nroughly the system uptime, to the per-group nsecs[] counters.  On an\notherwise idle, healthy device this appears as sudden ~uptime-sized jumps\nin the diskstats time fields (write_ticks/discard_ticks/time_in_queue).\n\nThe solution is to be explicit in our reads and writes to this field\nthat is preemption volatile.  We also add a barrier() to ensure that any\nsetting of PF_BLOCK_TS is ordered to happen after the cur_ktime update.\n\nThis issue was discovered using AI-assisted kprobes looking for paths\nthat were leaking zeroed timestamps in a live system, based on the\nobservation that we were sometimes seeing uptime-sized jumps in kernel\nexported counters. This was flagged by NodeDiskIOSaturation\nprometheus alerts that started firing on all hosts post 7.1.3 kernel\nupgrade, due to node-exporter now exporting a nonsensical\nnode_disk_io_time_weighted_seconds_total.\n\nFixes: fad156c2af22 (\"block: invalidate cached plug timestamp after task switch\")\nCc: stable@vger.kernel.org\nSigned-off-by: Mike Waychison <mike@waychison.com>\nAssisted-by: Claude:claude-opus-4.8\nLink: https://patch.msgid.link/20260715192950.2488921-1-mike@waychison.com\nSigned-off-by: Jens Axboe <axboe@kernel.dk>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "128391b57e0977c35243672a6f970073651f3831"
+      ],
+      "paths": [
+        "block/blk.h"
+      ],
+      "sha256": "9c114c3b293b4b2f0bbfe1264ad1c5628d41f33dadb6b155c42f2855ffabbdee",
+      "source": "stable",
+      "subject": "block: fix race in blk_time_get_ns() returning 0",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "6024f6d0d9b9ca5138bfc4ac6f6e4bdf616e42b3": {
+      "date": "2026-08-19",
+      "message": "mm/huge_memory: fix huge_zero_pfn race\n\ncommit 33192a26cddea7a7e4ca66e5c3eebd36fa8be2bb upstream.\n\nPatch series \"mm/huge_memory: fix huge_zero_pfn race\", v2.\n\nThere is a subtle race in the reference-counted huge_zero_folio\nimplementation.\n\nThe fast path atomic logic fails to account for the fact that the shrinker\n(which drops the final huge_zero_refcount pin) can overwrite huge_zero_pfn\nwith the ~0UL sentinel value in shrink_huge_zero_folio_scan() after a\nracing get_huge_zero_folio() installed a valid value there.\n\nThis results in huge_zero_folio being correctly set but huge_zero_pfn\nbeing set incorrectly and thus is_huge_zero_pfn() and consequently\nis_huge_zero_pmd() will misidentify the huge zero folio as being an\nordinary THP folio.\n\nThis can result in the huge zero folio being split and otherwise treated\nincorrectly.\n\nThe solution to this is very subtle as there is an atomic fast path, and\nthus ordering in weakly ordered architectures has to be treated very\ncarefully.\n\nThe first commit fixes the issue by introducing a spinlock around\nhuge_zero_[pfn, folio, refcount] write, with careful consideration paid to\nload/store ordering in the fast path.  It is placed first and kept as\nsmall as possible so that it can be backported on its own.\n\nThe second commit is a pure cleanup which reworks the\nCONFIG_PERSISTENT_HUGE_ZERO_FOLIO logic to better separate the persistent\nlogic from the dynamically allocated one.\n\n\nThis patch (of 2):\n\nIf !CONFIG_PERSISTENT_HUGE_ZERO_FOLIO, the huge_zero_folio is refcounted\nby huge_zero_refcount and returned by mm_get_huge_zero_folio().\n\nWhen the caller is done with the huge zero page, its reference count is\ndecremented.  Only a shrinker can set the reference count to zero.\n\nA race can unfortunately occur between a shrinker decrementing the\nreference count to zero and a concurrent page fault.\n\nThis is because shrink_huge_zero_folio_scan() might, if very unlucky, be\npreempted between setting huge_zero_refcount to zero and writing an\ninvalid value.\n\nDuring this time get_huge_zero_folio() could write to huge_zero_pfn before\nshrink_huge_zero_folio_scan() resumes.\n\nIn this event the huge zero folio will be persistently misidentified\ncausing the THP code path to be entered inappropriately for the huge zero\nfolio:\n\n                CPU 0                                   CPU 1\n=======================================|=================================\nshrink_huge_zero_folio_scan()          |\n   atomic_cmpxchg() sets refcount to 0 |\n   xchg() sets huge_zero_folio to NULL | get_huge_zero_folio()\n                 |                     |    atomic_inc_not_zero() -> zero\n      preempted for a long time        |    Allocate new huge zero folio\n                 |                     |    Write valid huge_zero_folio\n                 v                     |    Write valid huge_zero_pfn\n  Overwrite huge_zero_pfn with ~0UL   <--- Invalid overwrite!\n\nThis results in is_huge_zero_pfn() and is_huge_zero_pmd() incorrectly\nreturning false for a huge zero page which could result in issues like the\nhuge zero folio being incorrectly split.\n\nNote that the issue is with huge_zero_pfn not huge_zero_folio, as\nget_huge_zero_folio() uses cmpxchg() gated on huge_zero_folio being NULL\nwith a retry loop and shrink_huge_zero_folio_scan() uses xchg() to set\nhuge_zero_folio.\n\nFix the issue by introducing a spinlock, huge_zero_lock, to prevent\nconcurrent write of huge_zero_folio, huge_zero_pfn and huge_zero_refcount.\n\nThere needs to be significant care taken here to ensure correctness:\n\nThe fast path in get_huge_zero_folio() uses atomic_inc_not_zero(), which\nis outside of the critical section, and means huge zero allocation is\ngated on zero huge_zero_refcount.\n\nThe fast path doesn't use huge_zero_lock, so the critical section is\nirrelevant to it.\n\nSo invariants are required - huge_zero_refcount MUST:\n\n* Only be set in the huge_zero_lock critical section to ensure\n  serialisation of huge_zero_pfn, huge_zero_folio and huge_zero_refcount\n  writes.\n\n* Be set non-zero only AFTER huge_zero_[pfn, folio] are set to valid values\n  so installation of the huge zero folio on read page fault ensures\n  concurrent is_huge_zero_*() calls correctly identify the huge zero folio.\n\n* Be set zero only BEFORE huge_zero_[pfn, folio] are set to NULL and ~0UL\n  respectively, and atomically.\n\nEstablish these by:\n\n* Only setting huge_zero_refcount to zero or an absolute value in the\n  huge_zero_lock critical section in get_huge_zero_folio() and\n  shrink_huge_zero_folio_scan(), and always updating atomically there\n  and elsewhere.\n\n* Using atomic_set_release(&huge_zero_refcount) in get_huge_zero_folio()\n  after huge_zero_[pfn, folio] are set. This is paired with\n  atomic_inc_not_zero() to ensure atomic_inc_not_zero() only observes a\n  non-zero value if huge_zero_[pfn, folio] are set.\n\n* Using atomic_cmpxchg() in shrink_huge_zero_folio_scan() (as before) to\n  ensure that it is set zero only when equal to 1 and set atomically.\n\n* atomic_cmpxchg() being fully ordered ensures this is done prior to\n  huge_zero_[folio, pfn] being set to NULL and ~0UL respectively.\n\nEliminate the retry loop in get_huge_zero_folio() as the atomic_cmpxchg()\nin shrink_huge_zero_folio_scan() is now performed under the lock, and\nreplace with an equally locked atomic_inc() to set the reference count\nshould the caller be raced on huge zero folio installation.\n\nfolio_put() naturally implies a full memory barrier so its ordering is\nmaintained correctly.\n\nThe huge zero folio also cannot be released except when the shrinker does\nso as it is non-LRU and non-rmappable.\n\nNote that only the huge zero shrinker (via shrink_huge_zero_folio_scan())\ncan actually set huge_zero_refcount to zero, which is the count of mm's\nwhich have at least one huge zero folio installed plus one shrinker pin.\n\nAdditionally convert a BUG_ON() to a VM_WARN_ON_ONCE().\n\nLink: https://lore.kernel.org/20260730-fix-refcounted-huge-zero-v2-0-c5d8a41b317f@kernel.org\nLink: https://lore.kernel.org/20260730-fix-refcounted-huge-zero-v2-1-c5d8a41b317f@kernel.org\nFixes: 3b77e8c8cde5 (\"mm/thp: make is_huge_zero_pmd() safe and quicker\")\nSigned-off-by: Lorenzo Stoakes (ARM) <ljs@kernel.org>\nReported-by: Hengbin Zhang <uqbarz@gmail.com>\nCloses: https://lore.kernel.org/linux-mm/20260727154001.4102341-1-uqbarz@gmail.com/\nSuggested-by: David Hildenbrand (Arm) <david@kernel.org>\nAcked-by: David Hildenbrand (Arm) <david@kernel.org>\nCc: Baolin Wang <baolin.wang@linux.alibaba.com>\nCc: Barry Song <baohua@kernel.org>\nCc: Dev Jain <dev.jain@arm.com>\nCc: Hannes Reinecke <hare@suse.de>\nCc: Hugh Dickins <hughd@google.com>\nCc: Kiryl Shutsemau <kas@kernel.org>\nCc: Lance Yang <lance.yang@linux.dev>\nCc: Liam R. Howlett <liam@infradead.org>\nCc: Nico Pache <npache@redhat.com>\nCc: Pankaj Raghav <p.raghav@samsung.com>\nCc: Ryan Roberts <ryan.roberts@arm.com>\nCc: Yang Shi <shy828301@gmail.com>\nCc: Zi Yan <ziy@nvidia.com>\nCc: <stable@vger.kernel.org>\nSigned-off-by: Andrew Morton <akpm@linux-foundation.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "b45b91db41379ee5fb36c187d6d7c37b725cbe8e"
+      ],
+      "paths": [
+        "mm/huge_memory.c"
+      ],
+      "sha256": "bc8af5a86f14c8af04d6da51a46f683d7fed24bcd308edafd3746a9a7d03487f",
+      "source": "stable",
+      "subject": "mm/huge_memory: fix huge_zero_pfn race",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "603c55e992f8e9b16848835bdafade68fd593c43": {
+      "date": "2026-07-04",
+      "message": "f2fs: keep atomic write retry from zeroing original data\n\ncommit 6d874b65aadce56ac78f76129dbcfc2599b638f8 upstream.\n\nA partial atomic write reserves a block in the COW inode before reading the\noriginal data page for the untouched bytes in that page.\n\nIf that read fails, write_begin returns an error but leaves the COW inode\nentry as NEW_ADDR. A retry of the same partial write then finds the COW\nentry, treats it as existing COW data, and f2fs_write_begin() zeroes the\nwhole folio because blkaddr is NEW_ADDR.\n\nIf the retry is committed, the bytes outside the retried write range are\ncommitted as zeroes instead of preserving the original file contents.\n\nOnly use the COW inode as the read source when it already has a real data\nblock. If the COW entry is still NEW_ADDR, treat it as a reservation to\nreuse: keep reading the old data from the original inode and avoid\nreserving or accounting the same atomic block again.\n\nCc: stable@kernel.org\nFixes: 3db1de0e582c (\"f2fs: change the current atomic write way\")\nSigned-off-by: Wenjie Qi <qiwenjie@xiaomi.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "58a5deb220bcac4c73bf58954c0845644c997487"
+      ],
+      "paths": [
+        "fs/f2fs/data.c"
+      ],
+      "sha256": "fdd6a88b4d8e9dac55ae8cc8ff4ffff8b129174413faa333ab0867c0b9a949f7",
+      "source": "stable",
+      "subject": "f2fs: keep atomic write retry from zeroing original data",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "60cada258dfe3694e15c4539259173c37bd5f1fe": {
+      "date": "2025-05-11",
+      "message": "memcg: optimize memcg_rstat_updated\n\nCurrently the kernel maintains the stats updates per-memcg which is needed\nto implement stats flushing threshold.  On the update side, the update is\nadded to the per-cpu per-memcg update of the given memcg and all of its\nancestors.  However when the given memcg has passed the flushing\nthreshold, all of its ancestors should have passed the threshold as well. \nThere is no need to traverse up the memcg tree to maintain the stats\nupdates.\n\nPerf profile collected from our fleet shows that memcg_rstat_updated is\none of the most expensive memcg function i.e.  a lot of cumulative CPU is\nbeing spent on it.  So, even small micro optimizations matter a lot.  This\npatch is microbenchmarked with multiple instances of netperf on a single\nmachine with locally running netserver and we see couple of percentage of\nimprovement.\n\nLink: https://lkml.kernel.org/r/20250410025752.92159-1-shakeel.butt@linux.dev\nSigned-off-by: Shakeel Butt <shakeel.butt@linux.dev>\nAcked-by: Roman Gushchin <roman.gushchin@linux.dev>\nReviewed-by: Yosry Ahmed <yosry.ahmed@linux.dev>\nCc: Johannes Weiner <hannes@cmpxchg.org>\nCc: Michal Hocko <mhocko@kernel.org>\nCc: Muchun Song <muchun.song@linux.dev>\nSigned-off-by: Andrew Morton <akpm@linux-foundation.org>\n\n",
+      "parents": [
+        "585a9145886ad1d06b39ddcd72d457f37ebb4ff4"
+      ],
+      "paths": [
+        "mm/memcontrol.c"
+      ],
+      "sha256": "25dbd225145cba3ea6e9329d7d4cf2d17d3f923232677412e3a5ade5c5eefbd5",
+      "source": "aosp",
+      "subject": "memcg: optimize memcg_rstat_updated",
+      "url": "https://android.googlesource.com/kernel/common"
+    },
+    "62c719203cb521b64fab74da94a81bdde5c18808": {
+      "date": "2026-07-24",
+      "message": "ipv6: ndisc: fix NULL deref in accept_untracked_na()\n\n[ Upstream commit d186e942365acece7c56d39da05dd63bf95b280a ]\n\naccept_untracked_na() re-fetches the inet6_dev with __in6_dev_get(dev)\nand dereferences idev->cnf.accept_untracked_na without a NULL check,\neven though its only caller ndisc_recv_na() already fetched and\nNULL-checked idev for the same device.\n\nBoth reads of dev->ip6_ptr run in the same RCU read-side critical\nsection, but a concurrent addrconf_ifdown() can clear dev->ip6_ptr\nbetween them: lowering the MTU below IPV6_MIN_MTU calls addrconf_ifdown()\nwithout the synchronize_net() that orders the unregister path, so the\nre-fetch returns NULL and oopses:\n\n BUG: KASAN: null-ptr-deref in ndisc_recv_na (net/ipv6/ndisc.c:974)\n Read of size 4 at addr 0000000000000364\n Call Trace:\n  <IRQ>\n  ndisc_recv_na (net/ipv6/ndisc.c:974)\n  icmpv6_rcv (net/ipv6/icmp.c:1193)\n  ip6_protocol_deliver_rcu (net/ipv6/ip6_input.c:479)\n  ip6_input_finish (net/ipv6/ip6_input.c:534)\n  ip6_input (net/ipv6/ip6_input.c:545)\n  ip6_mc_input (net/ipv6/ip6_input.c:635)\n  ipv6_rcv (net/ipv6/ip6_input.c:351)\n  </IRQ>\n\nIt is reachable by an unprivileged user via a network namespace.\n\nPass the caller's already validated idev instead of re-fetching it; the\nidev stays alive for the whole RCU critical section, so it is safe even\nafter dev->ip6_ptr has been cleared.\n\nFixes: aaa5f515b16b (\"net: ipv6: new accept_untracked_na option to accept na only if in-network\")\nReported-by: Xiang Mei <xmei5@asu.edu>\nSigned-off-by: Weiming Shi <bestswngs@gmail.com>\nReviewed-by: Jiayuan Chen <jiayuan.chen@linux.dev>\nLink: https://patch.msgid.link/20260617065512.2529757-2-bestswngs@gmail.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "13b561c893c741635adce3781490a7a1099106c8"
+      ],
+      "paths": [
+        "net/ipv6/ndisc.c"
+      ],
+      "sha256": "b713a04a5f39698d51f887b2e0eb7f3a618e19212340603e6a966b9e61c6056f",
+      "source": "stable",
+      "subject": "ipv6: ndisc: fix NULL deref in accept_untracked_na()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "6321ebf2a1052306e778410ed1e0229611a69500": {
+      "date": "2026-08-23",
+      "message": "bpf: Clear delta when clearing reg id for non-{add,sub} ops\n\ncommit 1b327732c84640c1e3da487eefe9d00cc9f2dd34 upstream.\n\nWhen a non-{add,sub} alu op such as xor is performed on a scalar\nregister that previously had a BPF_ADD_CONST delta, the else path\nin adjust_reg_min_max_vals() only clears dst_reg->id but leaves\ndst_reg->delta unchanged.\n\nThis stale delta can propagate via assign_scalar_id_before_mov()\nwhen the register is later used in a mov. It gets a fresh id but\nkeeps the stale delta from the old (now-cleared) BPF_ADD_CONST.\nThis stale delta can later propagate leading to a verifier-vs-\nruntime value mismatch.\n\nThe clear_id label already correctly clears both delta and id.\nMake the else path consistent by also zeroing the delta when id\nis cleared. More generally, this introduces a helper clear_scalar_id()\nwhich internally takes care of zeroing. There are various other\nlocations in the verifier where only the id is cleared. By using\nthe helper we catch all current and future locations.\n\nFixes: 98d7ca374ba4 (\"bpf: Track delta between \"linked\" registers.\")\nReported-by: STAR Labs SG <info@starlabs.sg>\nSigned-off-by: Daniel Borkmann <daniel@iogearbox.net>\nLink: https://lore.kernel.org/r/20260407192421.508817-2-daniel@iogearbox.net\nSigned-off-by: Alexei Starovoitov <ast@kernel.org>\n[shung-hsi.yu:\n - reverse 'off' -> 'delta' renaming done later in commit 3d91c618aca4 (\"bpf:\n   rename bpf_reg_state->off to bpf_reg_state->delta\")\n - kept \"dst_reg->live |= REG_LIVE_WRITTEN\", which got removed in commit\n   107e16979905 (\"bpf: disable and remove registers chain based liveness\")\n - dropped hunk in scalar_byte_swap(), which was added later in commit\n   9d2119984224 (\"bpf: Add bitwise tracking for BPF_END\")\n - dropped hunk in clear_singular_ids(), which was added later in commit\n   b2a0aa3a8739 (\"bpf: Clear singular ids for scalars in is_state_visited()\")]\nSigned-off-by: Shung-Hsi Yu <shung-hsi.yu@suse.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "1509c1ae9185ec7103899967ed788b6eebab3fcc"
+      ],
+      "paths": [
+        "kernel/bpf/verifier.c"
+      ],
+      "sha256": "8ca39b4f3f7ae9d6b06e2a381f9a96e5f448c155119daced76378a8c73f4d8c8",
+      "source": "stable",
+      "subject": "bpf: Clear delta when clearing reg id for non-{add,sub} ops",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "6dab4dec9a49121d079981ac913569f232c06b06": {
+      "date": "2026-07-24",
+      "message": "xfrm: Fix xfrm state cache insertion race\n\n[ Upstream commit ddd3d0132920319ac426e12456013eadbae67e15 ]\n\nThe xfrm input state cache insertion code checks the validity of\nthe state before acquiring the global xfrm_state_lock.  Thus it's\npossible for someone else to kill the state after it passed the\nvalidity check, and then the insertion will add the dead state\nto the cache.\n\nFix this by moving the validity check inside the lock.\n\nThis entire function is called on the input path, where BH must\nbe off (e.g., the caller of this function xfrm_input acquires\nits spinlocks without disabling BH).\n\nSo there is no need to disable BH here or take the RCU read lock.\nRemove both and replace them with an assertion that trips if BH\nis accidentally enabled on some future calling path.\n\nFixes: 81a331a0e72d (\"xfrm: Add an inbound percpu state cache.\")\nReported-by: Zero Day Initiative <zdi-disclosures@trendmicro.com>\nSigned-off-by: Herbert Xu <herbert@gondor.apana.org.au>\nReviewed-by: Simon Horman <horms@kernel.org>\nSigned-off-by: Steffen Klassert <steffen.klassert@secunet.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "c8242b7e5179339d5d6371f19e7375d09db688be"
+      ],
+      "paths": [
+        "net/xfrm/xfrm_state.c"
+      ],
+      "sha256": "0c43fe969acba694d15013c429f45cba57742336283356a24f01d2fb7ccd6a33",
+      "source": "stable",
+      "subject": "xfrm: Fix xfrm state cache insertion race",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "6f014bf46faf1645b6336f47390167de5c88e9d1": {
+      "date": "2026-09-26",
+      "message": "kallsyms: index symbols by token to speed up table compression\n\nThe kallsyms program compresses symbols by figuring out the most commonly\nused substrings in all of the input symbols then uses special character\ncodes to represent them.\n\nFor instance, 0xf7 might end up representing \"write_\", then every single\nsymbol that contains \"write_\" can use 0xf7 as a shorthand and save 5 bytes\neach time.\n\n'Special' character codes are any byte value that is not used in any\nsymbol, either due to being an invalid character, or not being present in\nany symbol (e.g. if no symbol contains 'z', then 'z' can be used as special\ncharacter).\n\nIt does this by first figuring out which special characters are available\nin insert_real_symbols_in_table(), then iterating through every available\nspecial character, counting how many times each pair of adjacent characters\nappear in symbols in build_initial_token_table().\n\nThese adjacent pairs are known as 'tokens'.\n\nToken counts are initially obtained by build_initial_token_table(), then\noptimize_result() calls find_best_token() to determine the token that\nappeared the most number of times and assigns it the next special\ncharacter.\n\nFinally, optimize_result() calls compress_symbols() to replace every token\nin every symbol with its special character, which updates token_profit[] as\nit does so.\n\nThis process is repeated for each remaining available special character,\nwith tokens now perhaps containing previously assigned special\ncharacters (e.g. if 'wr' was assigned 0x80, then the token representing\n'wri' would be '\\x80i').\n\nThis compresses that token by 50% in each symbol it appears in (two bytes\nare now represented by one) and thus by repeatedly doing this kallsyms\nobtains good symbol compression.\n\nHowever, compress_symbols() is seriously inefficient - it iterates through\nEVERY symbol for EVERY special character assignment, i.e. ~256 *\nnr_symbols.\n\nModern x86-64 kernels, for instance, have ~158,000 symbols, so millions of\niterations are performed, most of which are entirely unnecessary (tokens\ndon't appear in most symbols).\n\nIn practice kallsyms spends half its runtime doing this, two or three times\nper vmlinux link step.\n\nFix this by tracking which symbols each token appears in token_syms[], and\nonly compress symbols which actually need to be updated.\n\nEach time a token is compressed that token can no longer appear in any\nsymbol, so that token_syms[] entry can be freed.\n\nHowever new token_syms[] entries must be created for each new token\ncontaining the assigned special character, but this is bounded by the\nnumber of replacements in the symbol which is very small.\n\nIn testing on an x86-64 platform using clang, each kallsyms invocation\ndropped from 0.59s to 0.33s with CONFIG_KALLSYMS_ALL set and from 0.38s to\n0.22s without it set.\n\nThe data was carefully checked and verified to be byte-for-byte identical\nfor six symbol sets (two vmlinux passes, vmlinux.o, three userspace\nbinaries) with all option combinations.\n\nAs part of this change, additionally refactor the code to be a little\neasier to follow.\n\nkallsyms runs two or three times on the serial tail of every build that\nlinks vmlinux, no-op builds do not link and are unchanged.\n\nWhole build, 128-thread Threadripper 9980X, best of N runs:\n\n                                         before   after     delta\n                                         -------------------------------\n  x86 defconfig, touch mm/vma.c, gcc       11.1s    10.6s    -0.53s (-5%)\n  x86 defconfig, touch mm/vma.c, clang     11.1s    10.5s    -0.64s (-6%)\n  x86 defconfig, clean, gcc                32.3s    31.3s     -1.0s (-3%)\n  x86 defconfig, clean, clang              34.2s    33.3s    -0.89s (-3%)\n  x86 allmodconfig, touch mm/vma.c, gcc    39.7s    38.7s     -1.0s (-3%)\n  x86 allmodconfig, touch mm/vma.c, clang  40.3s    39.1s     -1.3s (-3%)\n\nAssisted-by: LLM\nReviewed-by: Kees Cook <kees@kernel.org>\nSigned-off-by: Lorenzo Stoakes (ARM) <ljs@kernel.org>\nLink: https://patch.msgid.link/20260923-build-speedup-v4-2-73128809a4a4@kernel.org\nSigned-off-by: Nathan Chancellor <nathan@kernel.org>\n\n",
+      "parents": [
+        "5fe4dd59664105a9ea1a9468aa7391806b80364a"
+      ],
+      "paths": [
+        "scripts/kallsyms.c"
+      ],
+      "sha256": "5e2c6ca16c9e60586c899641e7283392ae1bf385eb8f75506fb68c7bf403ec6c",
+      "source": "kbuild",
+      "subject": "kallsyms: index symbols by token to speed up table compression",
+      "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/kbuild/linux"
+    },
+    "7445fe965b7d8756070a40e80f8b73348ccda1d7": {
+      "date": "2026-07-24",
+      "message": "netfilter: ipset: Don't use test_bit() in lockless RCU readers in hash types\n\n[ Upstream commit e4b4984e28c16406ecb318444dea4a8bf47def3e ]\n\nSashiko pointed out that there are a few lockless RCU readers\nusing test_bit() which is a relaxed atomic operation and\nprovides no memory barrier guarantees. Use test_bit_acquire()\ninstead where the operation may run parallel with add/del/gc,\ni.e. is not one from the next cases\n\n- protected by region lock\n- in a set destroy phase\n- in a new/temporary set creation phase\n\nFixes: 18f84d41d34f (\"netfilter: ipset: Introduce RCU locking in hash:* types\")\nSigned-off-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "157c0a896127d16466d69729a3e140c29dfbf239"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_hash_gen.h"
+      ],
+      "sha256": "610719346a283c1f85c7f99380401e60975ed0dec711db1b2bf9566bef844954",
+      "source": "stable",
+      "subject": "netfilter: ipset: Don't use test_bit() in lockless RCU readers in hash types",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "791c91dc7a9dfb2457d5e29b8216a6484b9c4b40": {
+      "date": "2026-06-04",
+      "message": "ipv6: mcast: Fix use-after-free when processing MLD queries\n\nWhen processing an MLD query, a pointer to the multicast group address\nis retrieved when initially parsing the packet. This pointer is later\ndereferenced without being reloaded despite the fact that the skb header\nmight have been reallocated following the pskb_may_pull() calls, leading\nto a use-after-free [1].\n\nFix by copying the multicast group address when the packet is initially\nparsed.\n\n[1]\nBUG: KASAN: slab-use-after-free in __mld_query_work (net/ipv6/mcast.c:1512)\nRead of size 8 at addr ffff8881154b8e90 by task kworker/4:1/118\n\nWorkqueue: mld mld_query_work\nCall Trace:\n<TASK>\ndump_stack_lvl (lib/dump_stack.c:94 lib/dump_stack.c:120)\nprint_address_description.constprop.0 (mm/kasan/report.c:378)\nprint_report (mm/kasan/report.c:482)\nkasan_report (mm/kasan/report.c:595)\n__mld_query_work (net/ipv6/mcast.c:1512)\nmld_query_work (net/ipv6/mcast.c:1563)\nprocess_one_work (kernel/workqueue.c:3314)\nworker_thread (kernel/workqueue.c:3397 kernel/workqueue.c:3478)\nkthread (kernel/kthread.c:436)\nret_from_fork (arch/x86/kernel/process.c:158)\nret_from_fork_asm (arch/x86/entry/entry_64.S:245)\n</TASK>\n\n[...]\n\nFreed by task 118:\nkasan_save_stack (mm/kasan/common.c:57)\nkasan_save_track (mm/kasan/common.c:78)\nkasan_save_free_info (mm/kasan/generic.c:584)\n__kasan_slab_free (mm/kasan/common.c:253 mm/kasan/common.c:285)\nkfree (./include/linux/kasan.h:235 mm/slub.c:2689 mm/slub.c:6251 mm/slub.c:6566)\npskb_expand_head (net/core/skbuff.c:2335)\n__pskb_pull_tail (net/core/skbuff.c:2878 (discriminator 4))\n__mld_query_work (net/ipv6/mcast.c:1495 (discriminator 1))\nmld_query_work (net/ipv6/mcast.c:1563)\nprocess_one_work (kernel/workqueue.c:3314)\nworker_thread (kernel/workqueue.c:3397 kernel/workqueue.c:3478)\nkthread (kernel/kthread.c:436)\nret_from_fork (arch/x86/kernel/process.c:158)\nret_from_fork_asm (arch/x86/entry/entry_64.S:245)\n\nFixes: 97300b5fdfe2 (\"[MCAST] IPv6: Check packet size when process Multicast\")\nReported-by: Leo Lin <leo@depthfirst.com>\nReviewed-by: David Ahern <dahern@nvidia.com>\nSigned-off-by: Ido Schimmel <idosch@nvidia.com>\nReviewed-by: Eric Dumazet <edumazet@google.com>\nReviewed-by: Jiayuan Chen <jiayuan.chen@linux.dev>\nLink: https://patch.msgid.link/20260603101811.612594-1-idosch@nvidia.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\n\n",
+      "parents": [
+        "05ef0afa1bd63ae36a594e9b8e92057660e3b3a2"
+      ],
+      "paths": [
+        "net/ipv6/mcast.c"
+      ],
+      "sha256": "239cfa21efa781796e50b2a7178b787d4e4f80fd71ce42a7cab880a6b5e31ea0",
+      "source": "aosp",
+      "subject": "ipv6: mcast: Fix use-after-free when processing MLD queries",
+      "url": "https://android.googlesource.com/kernel/common"
+    },
+    "7dd01f7d0291583e3e5420c95c7d584e114899bd": {
+      "date": "2026-07-18",
+      "message": "f2fs: fix listxattr handling of corrupted xattr entries\n\n[ Upstream commit 5ef5bc304f23c3fe255d4936472378dcb74d0e94 ]\n\nValidate the xattr entry before reading its fields in f2fs_listxattr().\nReturn -EFSCORRUPTED when the entry is outside the valid xattr storage\narea instead of returning a successful partial result.\n\nFixes: 688078e7f36c (\"f2fs: fix to avoid memory leakage in f2fs_listxattr\")\nCc: stable@kernel.org\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Keshav Verma <iganschel@gmail.com>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "b885c7783c19c36c7bf899492a0bffcd68afa8c7"
+      ],
+      "paths": [
+        "fs/f2fs/xattr.c"
+      ],
+      "sha256": "d1dcee68db071b38303b1bee5a4bcdb9be954c1e8e06151389ae412c75291eb5",
+      "source": "stable",
+      "subject": "f2fs: fix listxattr handling of corrupted xattr entries",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "7e06a41b36638d514638de468428c14ae79db475": {
+      "date": "2026-07-24",
+      "message": "netfilter: ipset: Fix data race between add and dump in all hash types\n\n[ Upstream commit 2358f7427ccd6ec8867a48205d8fcec973683a3f ]\n\nWhen adding a new entry to the next position in the existing hash bucket,\nthe position index was incremented too early and parallel dump could\nread it before the entry was populated with the value. Move the setting\nof the position index after populating the entry.\n\nv2: Position counting fixed, noticed by Florian Westphal.\n\nFixes: 18f84d41d34f (\"netfilter: ipset: Introduce RCU locking in hash:* types\")\nReported-by: syzbot+786c889f046e8b003ca6@syzkaller.appspotmail.com\nReported-by: syzbot+1da17e4b41d795df059e@syzkaller.appspotmail.com\nReported-by: syzbot+421c5f3ff8e9493084d9@syzkaller.appspotmail.com\nSigned-off-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nStable-dep-of: e4b4984e28c1 (\"netfilter: ipset: Don't use test_bit() in lockless RCU readers in hash types\")\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "db58075bc9c2ad2731f9c063859b47104bc2e7ef"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_hash_gen.h"
+      ],
+      "sha256": "fbe2c2ba112cf4267ba53ef5dda9b072fa0d913d513a26c129a6cb424ae78b4f",
+      "source": "stable",
+      "subject": "netfilter: ipset: Fix data race between add and dump in all hash types",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "80600b5d0f3ecb9324120dc95b5e915130f516c5": {
+      "date": "2026-07-24",
+      "message": "ipv6: Fix null-ptr-deref in fib6_nh_mtu_change().\n\n[ Upstream commit 46c3b8191aad3d032776bf3bebf03efdf5f4b905 ]\n\nfib6_nh_mtu_change() re-fetches idev via __in6_dev_get(arg->dev) and\ndereferences idev->cnf.mtu6 without a NULL check. addrconf_ifdown()\nclears dev->ip6_ptr with RCU_INIT_POINTER() after rt6_disable_ip() has\nreleased tb6_lock, so the RA-driven MTU walk can observe a NULL idev and\noops. The caller rt6_mtu_change_route() guards its own __in6_dev_get(),\nbut this re-fetch is unguarded; nexthop-backed routes survive\naddrconf_ifdown()'s flush, so the walk still reaches it after ip6_ptr is\nnulled.\n\nReturn 0 when idev is NULL, matching rt6_mtu_change_route() and the\nfib6_mtu() fix in commit 5ad509c1fdad (\"ipv6: Fix null-ptr-deref in\nfib6_mtu().\").\n\n  Oops: general protection fault, ... KASAN: null-ptr-deref in range\n        [0x00000000000002a8-0x00000000000002af]\n  RIP: 0010:fib6_nh_mtu_change+0x203/0x990\n   rt6_mtu_change_route+0x141/0x1d0\n   __fib6_clean_all+0xd0/0x160\n   rt6_mtu_change+0xb4/0x100\n   ndisc_router_discovery+0x24b5/0x2cb0\n   icmpv6_rcv+0x12e9/0x1710\n   ipv6_rcv+0x39b/0x410\n\nFixes: c0b220cf7d80 (\"ipv6: Refactor exception functions\")\nReported-by: Weiming Shi <bestswngs@gmail.com>\nSigned-off-by: Xiang Mei <xmei5@asu.edu>\nReviewed-by: Fernando Fernandez Mancera <fmancera@suse.de>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260619045334.2427073-1-xmei5@asu.edu\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "16a1ecf39c217e3d164bd32ef2a4f650abc067fa"
+      ],
+      "paths": [
+        "net/ipv6/route.c"
+      ],
+      "sha256": "89cad23d9b0558ad0186c4c0c19b8f26cc4b18c5fd6eef00306fc1d3202e88a4",
+      "source": "stable",
+      "subject": "ipv6: Fix null-ptr-deref in fib6_nh_mtu_change().",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "806fcff98c1d7cb3c1dc0015e55ebdbe819e6b08": {
+      "date": "2026-08-19",
+      "message": "sched/psi: Shut down rtpoll_timer in psi_cgroup_free()\n\ncommit 5457025fa8ca3c0d2732109513de839e3e797190 upstream.\n\npsi_schedule_rtpoll_work() is called locklessly from the scheduler hotpath\nand can race psi_trigger_destroy() taking down the last rtpoll trigger under\nrtpoll_trigger_lock:\n\n  psi_schedule_rtpoll_work()        psi_trigger_destroy()\n\n  rcu_read_lock();\n  task = rcu_dereference(rtpoll_task);\n                                    rcu_assign_pointer(rtpoll_task, NULL);\n                                    timer_delete(&rtpoll_timer);\n  mod_timer(&rtpoll_timer, ...);\n  rcu_read_unlock();\n                                    synchronize_rcu();\n                                    kthread_stop(task_to_destroy);\n\nThe group can then be freed with the re-armed timer still pending, and\npoll_timer_fn() runs on freed memory.\n\n461daba06bdc (\"psi: eliminate kthread_worker from psi trigger scheduling\nmechanism\") deleted the timer synchronously after the synchronize_rcu(),\nwhich prevented this but raced trigger creation instead: the deletion could\ncancel the timer that a new trigger set armed during the grace period and,\nas creation also reinitialized the timer at the time, corrupt it.\n8f91efd870ea (\"psi: Fix race between psi_trigger_create/destroy\") moved the\ninitialization into group_init() and the deletion into the locked section,\ntrading the creation races for the window above.\n\nNeither placement in the destruction path works. A pending timer firing\nwhile the group is alive is harmless though. poll_timer_fn() just wakes the\nrtpoll waitqueue and doesn't re-arm itself. Bind the timer to the group's\nlifetime instead and shut it down in psi_cgroup_free(). Nothing can arm it\nby then. timer_shutdown_sync() because the timer is never armed again.\n\nFixes: 8f91efd870ea (\"psi: Fix race between psi_trigger_create/destroy\")\nCc: stable@vger.kernel.org # v5.10+\nReported-by: Sashiko AI <sashiko-bot@kernel.org>\nCloses: https://lore.kernel.org/all/20260711000434.36C4A1F000E9@smtp.kernel.org/\nSigned-off-by: Tejun Heo <tj@kernel.org>\nAcked-by: Johannes Weiner <hannes@cmpxchg.org>\nTested-by: Matt Fleming <mfleming@cloudflare.com>\nAcked-by: Suren Baghdasaryan <surenb@google.com>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "6a67c460b12315033268dce597546984fe5739e7"
+      ],
+      "paths": [
+        "kernel/sched/psi.c"
+      ],
+      "sha256": "76451e7d179d74061c744d048e65fd0937e8aea2117f710dd59af8718d650864",
+      "source": "stable",
+      "subject": "sched/psi: Shut down rtpoll_timer in psi_cgroup_free()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "820e501be8aee4b365d218d83227b314309c5fda": {
+      "date": "2026-06-09",
+      "message": "xfrm: Check for underflow in xfrm_state_mtu\n\n[ Upstream commit 742b04d0550b0ec89dcbc99537ec88653bd1ad90 ]\n\nLeo Lin reported OOB write issue in esp component:\n\n  xfrm_state_mtu() returns u32 but performs its arithmetic in unsigned\n  modulo-2^32 space using an attacker-influenced \"header_len + authsize +\n  net_adj\" subtracted from a small \"mtu\" argument. A nobody user can\n  install an IPv4 ESP tunnel SA with a large authentication key\n  (XFRMA_ALG_AUTH_TRUNC, e.g. hmac(sha512), 64-byte key, 64-byte trunc),\n  configure a small interface MTU (68 bytes), and set XFRMA_TFCPAD to a\n  large value. When a single UDP datagram is then sent through the\n  tunnel, xfrm_state_mtu() underflows to a near-2^32 value, and\n  esp_output() consumes it as a signed int via:\n\n        padto      = min(x->tfcpad, xfrm_state_mtu(x, mtu_cached))\n        esp.tfclen = padto - skb->len   (assigned to int)\n\n  esp.tfclen ends up negative (e.g. -207). It is sign-extended to size_t\n  when passed to memset() inside esp_output_fill_trailer(), producing a\n  ~16 EB write of zeroes at skb_tail_pointer(skb). KASAN logs it as\n  \"Write of size 18446744073709551537 at addr ffff888...\".\n\nCheck for underflow and return 1. This causes the sendmsg attempt to\nfail with ENETUNREACH.\n\nFixes: c5c252389374 (\"[XFRM]: Optimize MTU calculation\")\nReported-by: Leo Lin <leo@depthfirst.com>\nAssisted-by: Codex:26.506.31004\nSigned-off-by: David Ahern <dahern@nvidia.com>\nSigned-off-by: Steffen Klassert <steffen.klassert@secunet.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "ad8a27d63cac96bac441edd002209ebd996e12fb"
+      ],
+      "paths": [
+        "net/xfrm/xfrm_state.c"
+      ],
+      "sha256": "47a46f8fa39fe9b46bac958ae0cbc6eac78cb29f103798e2d1ccde0361de63f8",
+      "source": "stable",
+      "subject": "xfrm: Check for underflow in xfrm_state_mtu",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "86ab00cf81d44b675bb23db62b88fd76c8ac8cea": {
+      "date": "2026-06-19",
+      "message": "erofs: fix use-after-free on sbi->sync_decompress\n\n[ Upstream commit 1aee05e814d292064bf5fa15733741040cdc48ba ]\n\nz_erofs_decompress_kickoff() can race with filesystem unmount, causing\na use-after-free on sbi->sync_decompress.\n\nWhen I/O completes, z_erofs_endio() calls z_erofs_decompress_kickoff()\nto queue z_erofs_decompressqueue_work() asynchronously. Then, after all\nfolios are unlocked, unmount workflow can proceed and sbi will be freed\nbefore accessing to sbi->sync_decompress.\n\nThread (unmount)        I/O completion        kworker\n                        queue_work\n                                              z_erofs_decompressqueue_work\n                                               (all folios are unlocked)\ncleanup_mnt\n ..\n erofs_kill_sb\n  erofs_sb_free\n   kfree(sbi)\n                        access sbi->sync_decompress  // UAF!!\n\nFixes: 40452ffca3c1 (\"erofs: add sysfs node to control sync decompression strategy\")\nReported-by: syzbot+52bae5c495dbe261a0bc@syzkaller.appspotmail.com\nCloses: https://syzkaller.appspot.com/bug?extid=52bae5c495dbe261a0bc\nReviewed-by: Chao Yu <chao@kernel.org>\nReviewed-by: Jianan Huang <jnhuang95@gmail.com>\nSigned-off-by: Gao Xiang <hsiangkao@linux.alibaba.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "974339e126c1c40b3de418d0625ed0d85ae526ff"
+      ],
+      "paths": [
+        "fs/erofs/zdata.c"
+      ],
+      "sha256": "3170eee6f939030334090dd214749ba9e672780b45627ba7c7c5b5b611272514",
+      "source": "stable",
+      "subject": "erofs: fix use-after-free on sbi->sync_decompress",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "889a621272f9b7e19f35efa3d836347b4e209290": {
+      "date": "2026-09-24",
+      "message": "kconfig: Replace \"cc-option-bit\" with \"cc-option-str\"\n\n$(cc-option-bit) returns the flag it was given when the compiler accepts\nit, and an empty string otherwise. It was originally only used\ninternally for machine bit flags, but it is generally useful[1].\n\nRename it to $(cc-option-str), which says what it returns rather than\nwhat it was first used for, and extract the probe logic from the existing\n$(cc-option) macro to reuse it. Additionally add support for an optional\nfallback, much like the Kbuild cc-option macro. This can be used as:\n\n\tconfig CC_OPT_FOO\n\t\tdef_string \"$(cc-option-str,-fnew-option,-fold-option)\"\n\nIf the fallback is omitted, it is just an empty string.\n\nBuild tested ARCH=x86_64 defconfig with GCC 16.2.0.\n\nAssisted-by: LLM\nSigned-off-by: Kees Cook <kees@kernel.org>\nTested-by: Julian Braha <julianbraha@gmail.com>\nReviewed-by: Julian Braha <julianbraha@gmail.com>\nLink: https://patch.msgid.link/20260919005929.4077729-2-kees@kernel.org\nSigned-off-by: Nathan Chancellor <nathan@kernel.org>\n\n",
+      "parents": [
+        "651fb291c4c86b7be96720b129ef4619fbcef53c"
+      ],
+      "paths": [
+        "scripts/Kconfig.include"
+      ],
+      "sha256": "7919fab7a490320064913c72137ac8a4dccc209f24dcfd7dfd8a26b4bd49185d",
+      "source": "kbuild",
+      "subject": "kconfig: Replace \"cc-option-bit\" with \"cc-option-str\"",
+      "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/kbuild/linux"
+    },
+    "8dd8929b71c4f06c614f8f54c2cc070453faae16": {
+      "date": "2026-08-27",
+      "message": "xfrm: fix sk_dst_cache double-free in xfrm_user_policy()\n\n[ Upstream commit c283e9ada7fcb7dd4b10592623086b2e6d2f9925 ]\n\nxfrm_user_policy() clears the socket dst cache with __sk_dst_reset(),\ni.e. the non-atomic __sk_dst_set(sk, NULL): it reads sk_dst_cache with\nrcu_dereference_protected(), stores NULL and dst_release()s the old dst.\nThat is only safe if no other thread modifies sk_dst_cache concurrently.\n\nFor a connected UDP socket that does not hold: the transmit fast path\n(udp_sendmsg -> sk_dst_check -> sk_dst_reset) resets the cache locklessly\nwith an atomic xchg(). A per-socket policy change racing a send can make\nboth sides observe the same old dst and each dst_release() it, dropping\nthe socket's single reference twice and freeing the xfrm_dst bundle while\nit is still referenced:\n\n  BUG: KASAN: slab-use-after-free in dst_release\n  Write of size 4 at addr ffff88801897b6c0 by task exploit/155\n  Call Trace:\n   ...\n   dst_release (... ./include/linux/rcuref.h:109)\n   xfrm_user_policy (./include/net/sock.h:2239 ./include/net/sock.h:2256 net/xfrm/xfrm_state.c:3053)\n   do_ip_setsockopt (net/ipv4/ip_sockglue.c:1347)\n   ip_setsockopt (net/ipv4/ip_sockglue.c:1417)\n   do_sock_setsockopt (net/socket.c:2368)\n   __sys_setsockopt (net/socket.c:2393)\n   __x64_sys_setsockopt (net/socket.c:2396)\n   do_syscall_64 (arch/x86/entry/syscall_64.c:94)\n   entry_SYSCALL_64_after_hwframe (arch/x86/entry/entry_64.S:121)\n\nReachable by an unprivileged user via a user+network namespace.\n\nUse the atomic sk_dst_reset() so the cache is cleared and released with a\nsingle xchg(): whichever side wins releases the dst once, the other sees\nNULL and does nothing. Behaviour is otherwise unchanged.\n\nFixes: 2b06cdf3e688 (\"xfrm: Clear sk_dst_cache when applying per-socket policy.\")\nFixes: be8f8284cd89 (\"net: xfrm: allow clearing socket xfrm policies.\")\nReported-by: AutonomousCodeSecurity@microsoft.com\nSigned-off-by: Xiang Mei (Microsoft) <xmei5@asu.edu>\nSigned-off-by: Steffen Klassert <steffen.klassert@secunet.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "881a805a8029ba48c0ce81c6674910f8d83f7afb"
+      ],
+      "paths": [
+        "net/xfrm/xfrm_state.c"
+      ],
+      "sha256": "ae680c34781da274d0a854a32d9fecd0c944de849ea5024ce7d13021cb8ccfc5",
+      "source": "stable",
+      "subject": "xfrm: fix sk_dst_cache double-free in xfrm_user_policy()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "8e23114b89e28549393351afde3c87e7b43a0c97": {
+      "date": "2026-08-19",
+      "message": "blk-mq: reinsert cached request to the list\n\n[ Upstream commit b051bb6bf0a231117036aa607cadf55be8e63910 ]\n\nA previous commit removed an optimization out of caution for a scenario\nthat turns out not to be real: all the \"queue_exit\" goto's are safe to\nreinsert the request into the cached_rq's plug list as they are either\nfrom a non-blocking path, or a successful merge that already holds the\nqueue reference. This optimization is most needed for small sequential\nworkloads that successfully merge into larger requests.\n\nFixes: dc278e9bf2b9 (\"blk-mq: pop cached request if it is usable\")\nSuggested-by: Ming Lei <tom.leiming@gmail.com>\nSuggested-by: Christoph Hellwig <hch@lst.de>\nSigned-off-by: Keith Busch <kbusch@kernel.org>\nReviewed-by: Chaitanya Kulkarni <kch@nvidia.com>\nLink: https://patch.msgid.link/20260526153531.2365935-1-kbusch@meta.com\nSigned-off-by: Jens Axboe <axboe@kernel.dk>\nSigned-off-by: Simon Liebold <simonlie@amazon.de>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "23d8ea1e303b5f32d883757a4a707e791dbc9808"
+      ],
+      "paths": [
+        "block/blk-mq.c"
+      ],
+      "sha256": "31ea00b1736a0adf49d14ae83ca33f781908cfe6a69eabf03d5a551a3b040f20",
+      "source": "stable",
+      "subject": "blk-mq: reinsert cached request to the list",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "925628656b73b70930972ccde421de4f758d8650": {
+      "date": "2026-08-19",
+      "message": "futex: Prevent robust futex exit race some more\n\ncommit 6d4514ca9cdf61fec4ec634cf50386f6f7e69748 upstream.\n\nA robust futex unlock stores 0 over the whole futex value - wiping\nFUTEX_WAITERS - and wakes a single waiter. That wakeup is a one-shot\nnotification: the protocol relies on its recipient to either acquire the\nfutex (and eventually unlock while aware of the remaining contention) or\nre-arm FUTEX_WAITERS before sleeping again.  If the woken waiter is killed\nbefore it can do either, the kernel must jump in and wake the next task\ndown the line.\n\nThis is a known complication of the futex protocol with a previous\npartial fix in commit ca16d5bee598 (\"futex: Prevent robust futex exit\nrace\"). Unfortunately, that fix is insufficient.\n\nIf a third task re-acquired the futex through the uncontended fast\npath in the meantime, the notification is lost: robust exit processing\nsees that it is owned by another task and does nothing, while the new\nowner sees no FUTEX_WAITERS when it unlocks and wakes nobody.\nThe remaining waiters sleep forever behind a free futex:\n\n  A owns the futex, B and C sleep in FUTEX_WAIT\n                                        uval == A | FUTEX_WAITERS\n  A robust unlock: store 0, FUTEX_WAKE(1) wakes B\n                                        uval == 0\n  D fast path acquire: cmpxchg(0 -> D)\n                                        uval == D, no FUTEX_WAITERS\n  B killed before acting on the wakeup\n  B exit walk, pending op: owner D != B -> no action\n  D unlock: no FUTEX_WAITERS -> no wake\n                                        C sleeps forever\n\nThis is clearly a shortcoming in the implementation, which fails to keep\nthe FUTEX_WAITERS bit consistent.\n\nWork around this by augmenting the robust list exit processing to also\nperform the extra wakeup if the futex word is owned by another thread but\nFUTEX_WAITERS is not set.\n\nThis does not fix the problem of a non-contended take over/release and free\nsequence, which has been discussed for years and has been addressed by\ncommit 3ca9595d9fb6 (\"futex: Add support for unlocking robust futexes\") and\nsubsequent changes, but failed to take the problem described above into\naccount.\n\nA more complete solution which is based on the in kernel unlock of\ncontended robust futexes has been discussed in the context of this change\nand should show up in mainline sooner than later.\n\n[ tglx: Amend change log slightly and fixup coding style ]\n\nFixes: ca16d5bee598 (\"futex: Prevent robust futex exit race\")\nSigned-off-by: Keno Fischer <keno@juliahub.com>\nSigned-off-by: Thomas Gleixner <tglx@kernel.org>\nSigned-off-by: Ingo Molnar <mingo@kernel.org>\nSigned-off-by: Thomas Gleixner <tglx@kernel.org>\nAssisted-by: ClaudeCode:claude-fable-5 tla+\nCc: stable@vger.kernel.org\nLink: https://patch.msgid.link/20260730194705.38981-1-keno@juliacomputing.com\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "d07123d36c9be70e2bac208e023db6d587b500c9"
+      ],
+      "paths": [
+        "kernel/futex/core.c"
+      ],
+      "sha256": "df03145dae8f36481b242ec7d335b7e32e6de837a381f804296bb72df3791b11",
+      "source": "stable",
+      "subject": "futex: Prevent robust futex exit race some more",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "9b26518b6896a16b809b1e42986f4ebac7bccc1e": {
+      "date": "2026-07-08",
+      "message": "ipv6: mcast: Fix potential UAF in MLD delayed work\n\nA race condition exists between device teardown and incoming MLD query\nprocessing, leading to a Use-After-Free in the MLD delayed work.\n\nDuring device destruction, the primary reference to inet6_dev is dropped,\nwhich can drop its refcount to 0. The actual freeing of inet6_dev memory\nis deferred via RCU.\n\nConcurrently, the packet receive path runs under RCU read lock and obtains\nthe inet6_dev pointer. Because the memory is RCU-protected, CPU-0 can\nsafely dereference inet6_dev even if its refcount has hit 0.\n\nHowever, if CPU-0 calls igmp6_event_query() and schedules delayed work, it\nattempts to acquire a reference using in6_dev_hold(). This increments the\nrefcount from 0 to 1, triggering a \"refcount_t: addition on 0\" warning.\nSince the inet6_dev memory is still scheduled to be freed after the RCU\ngrace period, the device is freed while the work is still scheduled.\nWhen the work runs, it accesses the freed memory, causing a kernel panic.\n\nFix this by using refcount_inc_not_zero() (via a new helper\nin6_dev_hold_safe()) to prevent acquiring a reference if the device is\nalready being destroyed. If the refcount is 0, we do not schedule the work.\n\nFixes: 1da177e4c3f4 (\"Linux-2.6.12-rc2\")\nSigned-off-by: Eric Dumazet <edumazet@google.com>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260705181756.963063-3-edumazet@google.com\nSigned-off-by: Paolo Abeni <pabeni@redhat.com>\n\n",
+      "parents": [
+        "7b19c0f81ed1fdaec6bc522569be367199a9edf3"
+      ],
+      "paths": [
+        "include/net/addrconf.h",
+        "net/ipv6/mcast.c"
+      ],
+      "sha256": "2a8100cd0bf4fd06e3c891f1ce699c40a0f634649c18f42ceac3d3f86ecb2747",
+      "source": "mainline",
+      "subject": "ipv6: mcast: Fix potential UAF in MLD delayed work",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "9cbbac29d752fb5d95e375fa3685a359b89caa0a": {
+      "date": "2026-06-16",
+      "message": "block: Remove redundant plug in __submit_bio()\n\nThe patch removes the automatic plug/unplug operations from __submit_bio()\nthat were added to cache nsecs time when no explicit plug is used.\n\nThe plug mechanism is most effective when batching multiple I/O\noperations together. Creating a plug for every bio submission\nprovides minimal benefit while adding function call overhead and\nstack usage for every I/O operation.\n\nBelow is performance comparison with the latest upstream kernel.\n\nIotype  qd nj  rmix  mpstat busy  mpstat busy without plug\nRandrw  1  20  100       53%                 24%\nRandrw  1  40  100       70%                 24%\nRandrw  1  20  70        40%                 24%\nRandrw  1  40  70        60%                 26%\nRandrw  1  20  0         14%                 6%\nRandrw  1  40  0         20%                 7%\n\nFixes: 060406c61c7c (\"block: add plug while submitting IO\")\nSigned-off-by: Wen Xiong <wenxiong@linux.ibm.com>\nReviewed-by: Ming Lei <tom.leiming@gmail.com>\nLink: https://patch.msgid.link/20260616143121.878021-1-wenxiong@linux.ibm.com\nSigned-off-by: Jens Axboe <axboe@kernel.dk>\n\n",
+      "parents": [
+        "4f919141be38ea2b1314e3a531b7b998eb64e8bc"
+      ],
+      "paths": [
+        "block/blk-core.c"
+      ],
+      "sha256": "60ddc4c4fd5b60cf5e659144f6326190d620a60367e654b688851e1046a0e562",
+      "source": "mainline",
+      "subject": "block: Remove redundant plug in __submit_bio()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "a12c0025080e0215b74551a644c8a57f126fd738": {
+      "date": "2026-08-23",
+      "message": "netfilter: ipset: fix list type element drift bug\n\n[ Upstream commit 4cbd69766b35a089664cadb1f613bb85f7ef77a9 ]\n\nIf list_set_uadd() calls list_set_replace() to swap an expired entry,\nthe element count remains the same, therefore the increment must be elided.\n\nFixes: 702b71e7c666 (\"netfilter: ipset: Add element count to all set types header\")\nLink: https://sashiko.dev/#/patchset/20260806101947.2802-1-fw%40strlen.de\nSigned-off-by: Florian Westphal <fw@strlen.de>\nAcked-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "972fdf7c4f5c282a239c88fea614b056c33dc025"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_list_set.c"
+      ],
+      "sha256": "b131ea330c15eabc566d9ca58a84545d9856c729b11d5505b8c48905e3f1dd3b",
+      "source": "stable",
+      "subject": "netfilter: ipset: fix list type element drift bug",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "a38212687519f2a72f43e62dec1348a690412404": {
+      "date": "2026-08-27",
+      "message": "HID: core: fix OOB read of field->usage in hid_set_field()\n\ncommit a13cdb19fcb223ed41bdab3bab42b98dba87e90b upstream.\n\nhid_set_field() hands field->usage + offset to hid_dump_input() before\nthe guard that bounds offset:\n\n\thid_dump_input(field->report->device, field->usage + offset, value);\n\n\tif (offset >= field->report_count) {\n\t\thid_err(...);\n\t\treturn -1;\n\t}\n\nUnder CONFIG_DEBUG_FS hid_dump_input() dereferences that pointer, with\nbuf = hid_resolv_usage(usage->hid, NULL).  The usage[] array is\nallocated inline with the hid_field in hid_register_field() and holds\nfield->maxusage entries, so an offset past it reads off the end of the\nkvzalloc()ed allocation and into a neighbouring object.  Had the guard\nrun first, offset < report_count <= maxusage would already have confined\nthe pointer to the array.\n\nA caller supplies such an offset today.  picolcd_fb_send_tile()\nvalidates only report->maxfield before issuing\nhid_set_field(report->field[0], 11 + i, ...) for i = 0..31, so its\noffsets are fixed at 11..42 and are never checked against the bound\nfield.  When the device registers that field with fewer usages, the\nframebuffer deferred-io work drives the read on every tile.  KASAN\nreports a 4-byte slab-out-of-bounds read in hid_dump_input() below\nhid_set_field(), and the same boot logs \"offset (1) exceeds\nreport_count (1)\" from the guard that runs only afterwards.\n\nMove the hid_dump_input() call below the guard.  Because\nfield->maxusage >= field->report_count, the guard then establishes that\nfield->usage + offset lies inside the array before it is dereferenced,\nfor every caller and without changing behaviour on the valid path.\n\nDiscovered by XBOW, triaged by Baul Lee <baul.lee@xbow.com>\n\nFixes: 1da177e4c3f4 (\"Linux-2.6.12-rc2\")\nReported-by: Federico Kirschbaum <federico.kirschbaum@xbow.com>\nReported-by: Baul Lee <baul.lee@xbow.com>\nCc: stable@vger.kernel.org\nSigned-off-by: Baul Lee <baul.lee@xbow.com>\nSigned-off-by: Jiri Kosina <jkosina@suse.com>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "ba6af07e700bebf85724905e7e0e76a309e2147c"
+      ],
+      "paths": [
+        "drivers/hid/hid-core.c"
+      ],
+      "sha256": "33c407e9038b238cd02eea0a0573e7ccaf9494a74b417cfbbe9735b690310acc",
+      "source": "stable",
+      "subject": "HID: core: fix OOB read of field->usage in hid_set_field()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "a83264d8dfba400b94b87ecf88a3cff896cfc5cc": {
+      "date": "2026-08-19",
+      "message": "tcp: do not change rcv_ssthresh in tcp_measure_rcv_mss()\n\n[ Upstream commit 0e125ecfe20c077625cf0be8d750d5c3abc0dce9 ]\n\nCommit f5da7c45188e (\"tcp: adjust rcvq_space after updating scaling\nratio\") replaced the direct window_clamp update in tcp_measure_rcv_mss()\nwith a call to tcp_set_window_clamp(), a helper that implements the\nTCP_WINDOW_CLAMP setsockopt. As a side effect, the helper also shrinks\nrcv_ssthresh via __tcp_adjust_rcv_ssthresh().\n\nAs a result, each scaling_ratio decrease detected by\ntcp_measure_rcv_mss() also cuts rcv_ssthresh. Elsewhere in TCP,\nrcv_ssthresh is usually cut under memory pressure and grows via\ntcp_grow_window().\n\nFlows whose segment sizes vary keep scaling_ratio oscillating, which\nleads to an unstable rcv_ssthresh: a dip of rcv_ssthresh only recovers\nvia tcp_grow_window(), keeping the advertised window at a relatively\nlow level even after the ratio itself has recovered, and can even stall\nthe sender.\n\nObserved on a customer's proxy gateway after upgrading from kernel 6.1\nto 6.12: in the worst case, rcv_ssthresh was cut in half by a\nscaling_ratio dip. P99 latency jumped from <10ms on 6.1 to ~100ms on\n6.12, and almost returned to the 6.1 level with this patch applied.\n\nRestore the plain WRITE_ONCE() update of window_clamp, as introduced\nin commit a2cbb1603943 (\"tcp: Update window clamping condition\"), and\nkeep the rcvq_space.space adjustment. Now rcv_ssthresh is decoupled from\nscaling_ratio changes in tcp_measure_rcv_mss().\n\nFixes: f5da7c45188e (\"tcp: adjust rcvq_space after updating scaling ratio\")\nSigned-off-by: Nathan Gao <zcgao@amazon.com>\nLink: https://patch.msgid.link/20260725030806.28135-1-zcgao@amazon.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "ec3bb289cf19d526224117d5d450a5fd9cbd5ab2"
+      ],
+      "paths": [
+        "net/ipv4/tcp_input.c"
+      ],
+      "sha256": "0e85c4286b0618418335206fe0cb8e6b8ac02948ce3e2fbc6321984b7390da81",
+      "source": "stable",
+      "subject": "tcp: do not change rcv_ssthresh in tcp_measure_rcv_mss()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "aba4f94ac1832c7299c33e1b4fe5f87eef6dc8f1": {
+      "date": "2026-07-04",
+      "message": "f2fs: validate ACL entry sizes in f2fs_acl_from_disk()\n\ncommit c4810ada31e80cbe4011467c4f3b1e93f94134f3 upstream.\n\nf2fs_acl_count() only validates the aggregate ACL xattr length. A\nmalformed ACL can still place ACL_USER or ACL_GROUP in a slot that only\ncontains struct f2fs_acl_entry_short bytes, and f2fs_acl_from_disk()\nthen reads entry->e_id before verifying that a full entry fits.\n\nRequire a short entry before reading e_tag and e_perm, and require a\nfull entry before reading e_id for ACL_USER and ACL_GROUP. Return\n-EFSCORRUPTED from these new truncated-entry checks, while keeping the\npre-existing -EINVAL paths unchanged.\n\nValidation reproduced this kernel report:\nKASAN slab-out-of-bounds in __f2fs_get_acl+0x6fb/0x7e0\nRIP: 0033:0x7f4b835ea7aa\nThe buggy address belongs to the object at ffff888114589960 which belongs\nto the cache kmalloc-8 of size 8\nThe buggy address is located 0 bytes to the right of allocated 8-byte\nregion [ffff888114589960, ffff888114589968)\nRead of size 4\nCall trace:\n  dump_stack_lvl+0x66/0xa0 (?:?)\n  print_report+0xce/0x630 (?:?)\n  __f2fs_get_acl+0x6fb/0x7e0 (fs/f2fs/acl.c:169)\n  srso_alias_return_thunk+0x5/0xfbef5 (?:?)\n  __virt_addr_valid+0x224/0x430 (?:?)\n  kasan_report+0xe0/0x110 (?:?)\n  __f2fs_get_acl+0x5/0x7e0 (fs/f2fs/acl.c:169)\n  __get_acl+0x281/0x380 (?:?)\n  vfs_get_acl+0x10b/0x190 (?:?)\n  do_get_acl+0x2a/0x410 (?:?)\n  do_get_acl+0x9/0x410 (?:?)\n  do_getxattr+0xe8/0x260 (?:?)\n  filename_getxattr+0xd1/0x140 (?:?)\n  do_getname+0x2d/0x2d0 (?:?)\n  path_getxattrat+0x16c/0x200 (?:?)\n  lock_release+0xc8/0x290 (?:?)\n  cgroup_update_frozen+0x9d/0x320 (?:?)\n  lockdep_hardirqs_on_prepare+0xea/0x1a0 (?:?)\n  trace_hardirqs_on+0x1a/0x170 (?:?)\n  _raw_spin_unlock_irq+0x28/0x50 (?:?)\n  do_syscall_64+0x115/0x6a0 (arch/x86/entry/syscall_64.c:87)\n  entry_SYSCALL_64_after_hwframe+0x77/0x7f (?:?)\n\nCc: stable@kernel.org\nFixes: af48b85b8cd3 (\"f2fs: add xattr and acl functionalities\")\nAssisted-by: Codex:gpt-5.5\nSigned-off-by: Zhang Cen <rollkingzzc@gmail.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "bdccbae23b21fd11226a657b605c5b1456b3117b"
+      ],
+      "paths": [
+        "fs/f2fs/acl.c"
+      ],
+      "sha256": "e8c278364220919e2e46a936083fbbd37bdbde897deb1e355cd0f9c772e218f9",
+      "source": "stable",
+      "subject": "f2fs: validate ACL entry sizes in f2fs_acl_from_disk()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "b0bc1c75f304099347cfc0cc880b556966b54138": {
+      "date": "2026-06-30",
+      "message": "sched/psi: skip irqtime accounting when no new irq time has elapsed\n\npsi_account_irqtime() reads irq_time_read() into a per-rq cumulative\ncounter and only bails out when the delta vs. the previously accounted\namount is negative.  A delta of exactly zero is treated as \"do the\nwork\": psi_write_begin() is taken, cpu_clock(cpu) is read (which on\nx86 ends up in native_sched_clock() / rdtsc) and the cgroup ancestor\nchain is walked to add zero to every group's PSI_IRQ_FULL bucket.\n\nThe zero-delta case is common in practice -- it fires every time a\ncontext switch crosses a PSI group boundary on a CPU that hasn't\nserviced an interrupt between the two switches.\n\nMeasured on a 176-thread AMD EPYC 9D64 server running a compute\nintensive production workload, instrumented with bpftrace over a 30s\nwindow (irq_time_read() read directly from the per-CPU cpu_irqtime so\nthat delta == 0 and delta < 0 could be separated):\n\n  @total              17,229,311    (100.0%)\n  @ret_curr_swapper    7,864,195    ( 45.6%)  curr->pid == 0\n  @ret_samegrp           323,299    (  1.9%)  same cgroup as prev\n  @reached_delta       9,041,817    ( 52.5%)\n    @delta_positive    6,358,192    ( 36.9%)  real work\n    @delta_zero        2,683,625    ( 15.6%)  work wasted (this patch)\n    @delta_negative          (0)    (  0.0%)  monotonic clock\n\nSo 15.6 % of all psi_account_irqtime() calls - and 29.7 % of the\ncalls that get past the early returns - hit the delta == 0 case;\ndelta < 0 did not occur once in the 30 s window.  Under the current\ncode each of those ~89 k calls per second performs the full seqcount\nwrite + cpu_clock() read + cgroup-chain walk just to add 0 to every\ngroup's PSI_IRQ_FULL counter.\n\nExtend the early-return to also cover delta == 0.  rq->psi_irq_time\ndoes not need updating in that case (it would store the same value\nback) and no PSI bucket would change.  The existing behaviour for\ndelta > 0 is untouched.\n\nSigned-off-by: Usama Arif <usama.arif@linux.dev>\nSigned-off-by: Peter Zijlstra (Intel) <peterz@infradead.org>\nReviewed-by: Shakeel Butt <shakeel.butt@linux.dev>\nAcked-by: Johannes Weiner <hannes@cmpxchg.org>\nLink: https://patch.msgid.link/20260617175219.2494857-2-usama.arif@linux.dev\n\n",
+      "parents": [
+        "296744614dd061287c9812a15521a64e292a90b4"
+      ],
+      "paths": [
+        "kernel/sched/psi.c"
+      ],
+      "sha256": "e024c5c7772a934ddcc9ab3ea9aa96c24fe2a5c88ecfd246f7060d8110bdded7",
+      "source": "mainline",
+      "subject": "sched/psi: skip irqtime accounting when no new irq time has elapsed",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "b885c7783c19c36c7bf899492a0bffcd68afa8c7": {
+      "date": "2026-07-18",
+      "message": "f2fs: fix potential deadlock in gc_merge path of f2fs_balance_fs()\n\n[ Upstream commit 8b4468ec023d0d1b4669dfb867588997cc03a06b ]\n\nWhen we mount device w/ gc_merge mount option, we may suffer below\npotential deadlock:\n\nKworker\t\t\t\t\tGC trehad\t\t\tTruncator\n- f2fs_write_cache_pages\n - f2fs_write_single_data_page\n  - f2fs_do_write_data_page\n   - folio_start_writeback  --- set writeback flag on folio\n   - f2fs_outplace_write_data\n   : cached folio in internal bio cache\n  - f2fs_balance_fs\n   - wake_up(gc_thread)\n   : wake up gc thread to run foreground GC\n   - finish_wait(fggc_wq)\n   : wait on the waitqueue --- wait on GC thread to finish the work\n\t\t\t\t\t\t\t\t\t- truncate_inode_pages_range\n\t\t\t\t\t\t\t\t\t - __filemap_get_folio(, FGP_LOCK)  --- lock folio\n\t\t\t\t\t\t\t\t\t - truncate_inode_partial_folio\n\t\t\t\t\t\t\t\t\t  - folio_wait_writeback            --- wait on writeback being cleared\n\t\t\t\t\t- do_garbage_collect\n\t\t\t\t\t - move_data_page\n\t\t\t\t\t  - f2fs_get_lock_data_folio\n\t\t\t\t\t   - lock on folio  --- blocked on folio's lock\n\nIn order to avoid such deadlock, let's call below functions to commit\ncached bios in GC_MERGE path of f2fs_balance_fs() as the same as we did\nin NOGC_MERGE path.\n- f2fs_submit_merged_write(sbi, DATA);\n- f2fs_submit_all_merged_ipu_writes(sbi);\n\nCc: stable@kernel.org\nFixes: 351df4b20115 (\"f2fs: add segment operations\")\nCc: Ruipeng Qi <ruipengqi3@gmail.com>\nReported: Sandeep Dhavale <dhavale@google.com>\nSigned-off-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Chao Yu <chaseyu@google.com>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "44480f7e3f8369671452c0d262831c51aa5a9c20"
+      ],
+      "paths": [
+        "fs/f2fs/segment.c"
+      ],
+      "sha256": "d24081e6b68591782eb8431357716a4fd1b3689c3023e5d12793ca3bb21c31bb",
+      "source": "stable",
+      "subject": "f2fs: fix potential deadlock in gc_merge path of f2fs_balance_fs()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "bbebd9425cad3573d1527441753899b926525a0f": {
+      "date": "2026-07-04",
+      "message": "blk-cgroup: fix UAF in __blkcg_rstat_flush()\n\ncommit 0ab5ee5a1badb58cbb2242617cb01a4972b1f2a2 upstream.\n\nWhen multiple blkgs in the same blkcg are released concurrently,\na use-after-free can occur. The race happens when one blkg's\n__blkcg_rstat_flush() removes another blkg's iostat entries via\nllist_del_all(). The second blkg sees an empty list and proceeds\nto free itself while the first is still iterating over its entries.\n\nMove the flush from __blkg_release() (RCU callback) to blkg_release()\n(before call_rcu). This ensures the RCU grace period waits for any\nconcurrent flush's rcu_read_lock() section to complete before freeing.\n\nCc: stable@vger.kernel.org\nCc: Jay Shin <jaeshin@redhat.com>\nCc: Tejun Heo <tj@kernel.org>\nCc: Waiman Long <longman@redhat.com>\nFixes: 20cb1c2fb756 (\"blk-cgroup: Flush stats before releasing blkcg_gq\")\nReported-by: coregee2000@gmail.com\nCloses: https://lore.kernel.org/linux-block/CAHPqNmwT9oRpem3J3erS_W0uSQND47LGGSBsNxP8E6uSUish1w@mail.gmail.com/\nSigned-off-by: Ming Lei <ming.lei@redhat.com>\nTested-by: Jose Fernandez (Anthropic) <jose.fernandez@linux.dev>\nLink: https://patch.msgid.link/20260205155425.342084-1-ming.lei@redhat.com\nSigned-off-by: Jens Axboe <axboe@kernel.dk>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "c64dbef1c0fbd36f9530aa75112acdf6a6d3cfd8"
+      ],
+      "paths": [
+        "block/blk-cgroup.c"
+      ],
+      "sha256": "61ec7dadf284bce0d42306a8b4b3d5dc90a510c21f128748ce2ef73ef9c30f1c",
+      "source": "stable",
+      "subject": "blk-cgroup: fix UAF in __blkcg_rstat_flush()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "c710e9bf38e4e71a8db85d26a0f70c0674664207": {
+      "date": "2026-08-09",
+      "message": "netfilter: ipset: do not update comments from kernel-side hash adds\n\ncommit f30415929be8aeb002d557c8d3f7ab2d2188003a upstream.\n\nmtype_resize() copies comment pointers with memcpy(), not the comment\nobjects themselves. During the window after an entry has been copied but\nbefore the table swap and backlog replay, the old table is still\npublished for packet-side updates while the replacement-table entry\nalready holds the same ip_set_comment_rcu pointer.\n\nIf xt_SET --add-set ... --exist hits that old entry in this window,\nmtype_add() calls ip_set_init_comment() even though packet-side adds\ncarry no comment payload. That call frees the shared comment through the\nold entry, so the replacement-table entry now holds a stale pointer.\nWhen the queued add is replayed on the new table, mtype_add() calls\nip_set_init_comment() again and strlen() dereferences the stale pointer.\n\nFix this in mtype_add() by skipping ip_set_init_comment() when\next->target marks a packet-side add. Userspace adds still update\ncomments, while packet-side adds can no longer free comment storage\nshared with a resize copy.\n\nFixes: f66ee0410b1c (\"netfilter: ipset: Fix \"INFO: rcu detected stall in hash_xxx\" reports\")\nCc: stable@vger.kernel.org\nSigned-off-by: David Lee <david.lee@trailofbits.com>\nAssisted-by: Codex:gpt-5.5\nAcked-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "281c103a8eaed59001ce952f231df1b07674215a"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_hash_gen.h"
+      ],
+      "sha256": "11c77aa5f21441a1b8093731bb04ca7818151efb5d6f53813ef7e0f836eebdb7",
+      "source": "stable",
+      "subject": "netfilter: ipset: do not update comments from kernel-side hash adds",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "c940d1b96248c3081b664ede5418078bdc7c8c07": {
+      "date": "2026-07-24",
+      "message": "netfilter: ipset: make sure gc is properly stopped\n\n[ Upstream commit 4a597a87e2e2f608edb6be2c510dc826b4fdfb53 ]\n\nSashiko noticed that when destroying a set,\ncancel_delayed_work_sync() was called while gc\ncalls queue_delayed_work() unconditionally which\ncan lead not to properly shutting down the gc.\n\nFixes: f66ee0410b1c (\"netfilter: ipset: Fix \"INFO: rcu detected stall in hash_xxx\" reports\")\nSigned-off-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "fcb565966534909377a16be5f7b065db2e25c8b5"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_hash_gen.h"
+      ],
+      "sha256": "28f4274deb53ca06ae6c740b7644d55637724fda9f4b53dbf8f7712ddff4427d",
+      "source": "stable",
+      "subject": "netfilter: ipset: make sure gc is properly stopped",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "cfcc465018818fb4f08148a28adb5b0cb40a9ec1": {
+      "date": "2026-09-24",
+      "message": "kconfig: Add \"ld-option-str\"\n\nAdd the linker counterpart to $(cc-option-str), sharing a $(ld-probe)\nwith $(ld-option) the way the compiler macros share $(cc-probe). Like\n$(cc-option-str), it can now be used as:\n\n\tconfig LD_OPT_FOO\n\t\tdef_string \"$(ld-option-str,--new-option,--old-option)\"\n\nAn omitted fallback expands to the empty string.\n\nBuild tested ARCH=x86_64 defconfig with GCC 16.2.0, and checked against\nGNU ld 2.47.\n\nAssisted-by: LLM\nSigned-off-by: Kees Cook <kees@kernel.org>\nTested-by: Julian Braha <julianbraha@gmail.com>\nReviewed-by: Julian Braha <julianbraha@gmail.com>\nLink: https://patch.msgid.link/20260919005929.4077729-3-kees@kernel.org\nSigned-off-by: Nathan Chancellor <nathan@kernel.org>\n\n",
+      "parents": [
+        "889a621272f9b7e19f35efa3d836347b4e209290"
+      ],
+      "paths": [
+        "scripts/Kconfig.include"
+      ],
+      "sha256": "e88ac8cb2c3fe6a63cda6e3d3c0086186012661f3334fe2733d1d93c487a28ce",
+      "source": "kbuild",
+      "subject": "kconfig: Add \"ld-option-str\"",
+      "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/kbuild/linux"
+    },
+    "d860974a7e38d35e9e2c4dc8a9f4223b38b6ad99": {
+      "date": "2026-01-31",
+      "message": "f2fs: optimize f2fs_overwrite_io() for f2fs_iomap_begin\n\nWhen overwriting already allocated blocks, f2fs_iomap_begin() calls\nf2fs_overwrite_io() to check block mappings. However,\nf2fs_overwrite_io() iterates through all mapped blocks in the range,\nwhich can be inefficient for fragmented files with large I/O requests.\n\nThis patch optimizes f2fs_overwrite_io() by adding a 'check_first'\nparameter and introducing __f2fs_overwrite_io() helper. When called from\nf2fs_iomap_begin(), we only check the first mapping to determine if the\nrange is already allocated, which is sufficient for setting\nmap.m_may_create.\n\nThis optimization significantly reduces the number of f2fs_map_blocks()\ncalls in f2fs_overwrite_io() when called from f2fs_iomap_begin(),\nespecially for fragmented files with large I/O requests.\n\nCc: stable@kernel.org\nFixes: 351bc761338d (\"f2fs: optimize f2fs DIO overwrites\")\nReviewed-by: Sungjong Seo <sj1557.seo@samsung.com>\nReviewed-by: Sunmin Jeong <s_min.jeong@samsung.com>\nSigned-off-by: Yeongjin Gil <youngjin.gil@samsung.com>\nReviewed-by: Chao Yu <chao@kernel.org>\nSigned-off-by: Jaegeuk Kim <jaegeuk@kernel.org>\n\n",
+      "parents": [
+        "91b76f1059b60f453b51877f29f0e35693737383"
+      ],
+      "paths": [
+        "fs/f2fs/data.c"
+      ],
+      "sha256": "451137fb2b3118475e7843bc5d4bf76b6d5df2c06ee42b7f738a61aece0201bd",
+      "source": "aosp",
+      "subject": "f2fs: optimize f2fs_overwrite_io() for f2fs_iomap_begin",
+      "url": "https://android.googlesource.com/kernel/common"
+    },
+    "d8b96a79622e03813c221450498ca9742704ebf2": {
+      "date": "2025-08-11",
+      "message": "blk-wbt: Optimize wbt_done() for non-throttled writes\n\nIn the current implementation, the sync_cookie and last_cookie members of\nstruct rq_wb are used only by read requests and not by non-throttled write\nrequests. Based on this, we can optimize wbt_done() by removing one if\ncondition check for non-throttled write requests.\n\nSigned-off-by: Tang Yizhou <yizhou.tang@shopee.com>\nReviewed-by: Jan Kara <jack@suse.cz>\nReviewed-by: Yu Kuai <yukuai3@huawei.com>\nLink: https://lore.kernel.org/r/20250727173959.160835-2-yizhou.tang@shopee.com\nSigned-off-by: Jens Axboe <axboe@kernel.dk>\n\n",
+      "parents": [
+        "343dc5423bfe876c12bb80c56f5e44286e442a07"
+      ],
+      "paths": [
+        "block/blk-wbt.c"
+      ],
+      "sha256": "8f6bb148f9cb32ff8c8b4fae1d6067133bc86752a99d6208a9c3f7871f5c0434",
+      "source": "aosp",
+      "subject": "blk-wbt: Optimize wbt_done() for non-throttled writes",
+      "url": "https://android.googlesource.com/kernel/common"
+    },
+    "dec2edb7aaf12a8878b3a03172ea8fc277b8eaad": {
+      "date": "2026-08-28",
+      "message": "inet: frags: strip GSO state from fragments before reassembly\n\ncommit d5dc1e69fd7258ea605c9952e5d5947539159ae3 upstream.\n\nA virtio_net_hdr (tun/tap, or AF_PACKET with PACKET_VNET_HDR) can mark\nan IPv4 or IPv6 fragment as GSO; nothing relates gso_type to frag_off.\ninet_frag_reasm_prepare()/inet_frag_reasm_finish() keep the first\nfragment's skb as the head of the reassembled datagram, including its\nshinfo->gso_size/gso_type/gso_segs, and chain the remaining fragments\non frag_list with whatever linear/paged layout they arrived with.\n\nAfter ip_defrag() (ip_local_deliver(), nf_defrag_ipv4, ...) the\nreassembled skb therefore still claims to be GSO (SKB_GSO_DODGY), and\nthe next software segmentation point - udp_rcv_segment() on local\ndelivery, validate_xmit_skb(), or the ip_finish_output_gso() slow\npath - hands it to skb_segment(). skb_segment()'s frag_list walk\nassumes GRO-shaped input and hits one of its BUG_ON()s. Two writes to\na tap by an unprivileged user in its own userns are enough:\n\n  kernel BUG at net/core/skbuff.c:4899!\n  Oops: invalid opcode: 0000 [#1] SMP KASAN NOPTI\n  CPU: 0 UID: 1000 PID: 82 Comm: poc Not tainted 7.2.0-pentest+ #2\n  RIP: 0010:skb_segment+0x20ca/0x48b0\n  Call Trace:\n   <TASK>\n   __udp_gso_segment+0x29a/0x27d0\n   udp4_ufo_fragment+0x458/0x6c0\n   inet_gso_segment+0x429/0x1340\n   skb_mac_gso_segment+0x233/0x4f0\n   __skb_gso_segment+0x308/0x660\n   udp_queue_rcv_skb+0x440/0xad0\n   udp_unicast_rcv_skb+0xc7/0x2c0\n   udp_rcv+0x16ce/0x2260\n   ip_protocol_deliver_rcu+0x197/0x2d0\n   ip_local_deliver+0x430/0x690\n   ip_rcv+0x16f/0x1f0\n   __netif_receive_skb_one_core+0x15e/0x1c0\n   __netif_receive_skb+0x1e/0x110\n   netif_receive_skb+0xf6/0x5c0\n   tun_rx_batched.isra.0+0x3ab/0x790\n   tun_get_user+0x17c3/0x3550\n   tun_chr_write_iter+0xba/0x1b0\n   vfs_write+0x646/0x1130\n   </TASK>\n  Kernel panic - not syncing: Fatal exception in interrupt\n\nThis runs with BH disabled, so it is a panic rather than an oops. The\nsame is reachable with CAP_NET_RAW in a netns where a defrag point\nprecedes a GSO point, and from a guest whose VMM forwards\nvirtio_net_hdr to a tap. The SKB_GSO_DODGY frag_list checks added by\ncommit 3dcbdb134f32 (\"net: gso: Fix skb_segment splat when splitting\ngso_size mangled skb having linear-headed frag_list\") and by\ncommit 9e4b7a99a03a (\"net: gso: fix panic on frag_list with mixed head\nalloc types\") do not cover it: page-backed heads skip them, and kmalloc\nheads skip them when gso_size == skb_headlen(head), which the sender\ncontrols.\n\nAn skb entering a frag queue is an IP fragment by definition and\ncannot legitimately carry GSO state: GRO does not merge fragments and\nthe stack segments before it fragments, so only untrusted sources are\naffected. This has been reachable since\ncommit f43798c27684 (\"tun: Allow GSO using virtio_net_hdr\"), the first\npath that let userspace attach GSO metadata to an IP fragment. Reset\nthe GSO fields of every fragment as it is queued, in\ninet_frag_queue_insert(), which IPv4, IPv6, nf_conntrack_reasm and\n6lowpan reassembly share; then neither the head nor the frag_list\nmembers of the reassembled skb carry them (the members matter too:\nthe ip_do_fragment()/ip6_fragment() fast paths send them out as they\nare). The head may remain CHECKSUM_PARTIAL; that is already accepted\non receive and resolved by skb_checksum_help() in\nip_do_fragment()/ip6_fragment() on forward.\n\nTested on top of net.git (dc4b95b8fee9), x86_64: the tap reproducer\nabove, two further IPv4 frag_list geometries that reach\nBUG_ON(i >= nfrags) and BUG_ON(!list_skb->head_frag), and an IPv6\nfragment-header variant (udp6_ufo_fragment()) each panic the unpatched\nkernel; with this patch all four datagrams are delivered intact and\nnothing is logged.\n\nFixes: f43798c27684 (\"tun: Allow GSO using virtio_net_hdr\")\nCc: stable@kernel.org\nSuggested-by: Eric Dumazet <edumazet@google.com>\nSigned-off-by: Xinyang Ge <xinyang@anthropic.com>\nSigned-off-by: Paolo Abeni <pabeni@redhat.com>\nReviewed-by: Eric Dumazet <edumazet@google.com>\nLink: https://patch.msgid.link/937926e509f2acd8e0e66520dc2b30fd6b4d1687.1787839506.git.pabeni@redhat.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "8b74a2fbba5adab77f2ea88386e9d9fc224be987"
+      ],
+      "paths": [
+        "net/ipv4/inet_fragment.c"
+      ],
+      "sha256": "f4686c5319e071a2d34c6fd5b5718d0027583bc27995f3407a29e52baeb796cf",
+      "source": "stable",
+      "subject": "inet: frags: strip GSO state from fragments before reassembly",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "df50875c208a1ac90d62d83a4de07b583ecddbf1": {
+      "date": "2026-08-23",
+      "message": "tcp: fix icsk_ack.ato bitfield overflow\n\n[ Upstream commit 60837e4b840a9c3f7ec826e3584df0bc6542a2c2 ]\n\nOn cross-region connections we observed delayed ACKs suddenly turning\ninto immediate ACKs plus a TCP_MAX_QUICKACKS burst, as if the\nconnection had just received its first data segment.\n\nCommit 95b9a87c6a6b (\"tcp: record last received ipv6 flowlabel\")\nsqueezed icsk_ack.ato into 8 bits, sized for TCP_DELACK_MAX. But both\nwriters still bound ato by icsk_rto, which can be well above 255\njiffies, so the bitfield assignment silently wraps mod 256: repeated\ndelack timer misses double ato up to icsk_rto, storing 320 as 64 and\n256 as 0, and ato == 0 is the \"first data packet\" sentinel in\ntcp_event_data_recv().\n\nClamp both writers to TCP_DELACK_MAX, which the static_assert already\nguarantees to fit and tcp_send_delayed_ack() effectively caps ato at\nanyway.\n\nFixes: 95b9a87c6a6b (\"tcp: record last received ipv6 flowlabel\")\nSigned-off-by: Jiayuan Chen <jiayuan.chen@linux.dev>\nReviewed-by: Neal Cardwell <ncardwell@google.com>\nLink: https://patch.msgid.link/20260807014437.36687-1-jiayuan.chen@linux.dev\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "b662a1fb4f3a5ea19bac24eea8315b1d05be51e7"
+      ],
+      "paths": [
+        "net/ipv4/tcp_input.c",
+        "net/ipv4/tcp_timer.c"
+      ],
+      "sha256": "a694028583373491b76073251cfc4551745e904328446553498c2b8971feade5",
+      "source": "stable",
+      "subject": "tcp: fix icsk_ack.ato bitfield overflow",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "e1c345582c979ed44f881dec0b3137d862097c6b": {
+      "date": "2026-07-28",
+      "message": "mm/filemap: reduce unnecessary xarray lookups when read cached pages\n\nPatch series \"mm/filemap: reduce unnecessary xarray lookups\".\n\nThis series optimizes xarray lookups in filemap by avoiding redundant\niterations after obtaining the last needed folio.  The boundary check is\nmoved to before advancing the xarray iterator, eliminating unnecessary\nlookups and branches in the fast path.  This reduces the overhead of\nfilemap_get_read_batch() from 2.91% to 2.53% in 4k read tests.\n\n\nThis patch (of 2):\n\nWhen reading small amounts of data from the page cache, only a single\nfolio is typically returned from filemap_read_get_batch().  In this case,\ncalling xas_advance() or xas_next() after adding the folio to the batch is\nunnecessary and only introduces extra branches.\n\nThe same issue exists for large reads, where one additional xarray walk is\nalways performed before termination.\n\nQuit the loop once we get the last folio in the range, so the final\nredundant xarray advancement can be avoided.\n\nThe xas_next() does not update xa_index when xas->xa_node is set to\nXAS_RESTART, so the put and retry path would not update xa_index, hence\nthe warning should therefore never trigger.\n\nDuring the 4k reads test, the overhead of this function dropped from 2.91%\nto 2.53%.\n\nLink: https://lore.kernel.org/20260620062446.351475-2-chizhiling@163.com\nSigned-off-by: Chi Zhiling <chizhiling@kylinos.cn>\nSuggested-by: Matthew Wilcox (Oracle) <willy@infradead.org>\nReviewed-by: Jan Kara <jack@suse.cz>\nCc: Chi Zhiling <chizhiling@kylinos.cn>\nCc: Matthew Wilcox (Oracle) <willy@infradead.org>\nSigned-off-by: Andrew Morton <akpm@linux-foundation.org>\n\n",
+      "parents": [
+        "094470f3f45b9efdab2c6b27f920071e29ebf5c5"
+      ],
+      "paths": [
+        "mm/filemap.c"
+      ],
+      "sha256": "8b9cf01f6a31d4a6afe992ab247251f347675692e1f7711c69864020ccf1ea17",
+      "source": "mainline",
+      "subject": "mm/filemap: reduce unnecessary xarray lookups when read cached pages",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "ebbebf6cee950d7f1c81990256c0eae9e62572ae": {
+      "date": "2026-07-24",
+      "message": "ipv6: mcast: Fix potential UAF in MLD delayed work\n\n[ Upstream commit 9b26518b6896a16b809b1e42986f4ebac7bccc1e ]\n\nA race condition exists between device teardown and incoming MLD query\nprocessing, leading to a Use-After-Free in the MLD delayed work.\n\nDuring device destruction, the primary reference to inet6_dev is dropped,\nwhich can drop its refcount to 0. The actual freeing of inet6_dev memory\nis deferred via RCU.\n\nConcurrently, the packet receive path runs under RCU read lock and obtains\nthe inet6_dev pointer. Because the memory is RCU-protected, CPU-0 can\nsafely dereference inet6_dev even if its refcount has hit 0.\n\nHowever, if CPU-0 calls igmp6_event_query() and schedules delayed work, it\nattempts to acquire a reference using in6_dev_hold(). This increments the\nrefcount from 0 to 1, triggering a \"refcount_t: addition on 0\" warning.\nSince the inet6_dev memory is still scheduled to be freed after the RCU\ngrace period, the device is freed while the work is still scheduled.\nWhen the work runs, it accesses the freed memory, causing a kernel panic.\n\nFix this by using refcount_inc_not_zero() (via a new helper\nin6_dev_hold_safe()) to prevent acquiring a reference if the device is\nalready being destroyed. If the refcount is 0, we do not schedule the work.\n\nFixes: 1da177e4c3f4 (\"Linux-2.6.12-rc2\")\nSigned-off-by: Eric Dumazet <edumazet@google.com>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260705181756.963063-3-edumazet@google.com\nSigned-off-by: Paolo Abeni <pabeni@redhat.com>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "fbbed1834fcc23f8e91edee9dc7c6205db7a9edd"
+      ],
+      "paths": [
+        "include/net/addrconf.h",
+        "net/ipv6/mcast.c"
+      ],
+      "sha256": "5c75cc061d7fbb0ac91c616106cfc2ca95ec0672a299bc77918f9b67c81503d2",
+      "source": "stable",
+      "subject": "ipv6: mcast: Fix potential UAF in MLD delayed work",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "f206def4e86d810f927ba1d8e322ea72b29bce58": {
+      "date": "2026-06-09",
+      "message": "netfilter: conntrack: tcp: do not force CLOSE on invalid-seq RST without direction check\n\ncommit bed6e04be8e6b9133d8b16d5a42d0e0ce674fa9a upstream.\n\nAn unintended behavior in the TCP conntrack state machine allows a\nconnection to be forced into the CLOSE state using an RST packet with an\ninvalid sequence number.\n\nSpecifically, after a SYN packet is observed, an RST with an invalid SEQ\ncan transition the conntrack entry to TCP_CONNTRACK_CLOSE, regardless of\nwhether the RST corresponds to the expected reply direction. The relevant\ncode path assumes the RST is a response to an outgoing SYN, but does not\nvalidate packet direction or ensure that a matching SYN was actually sent\nin the opposite direction.\n\nAs a result, a crafted packet sequence consisting of a SYN followed by an\ninvalid-sequence RST can prematurely terminate an active NAT entry. This\nmakes connection teardown easier than intended.\n\nSo, tighten the state transition logic to ensure that RST-triggered\nCLOSE transitions only occur when the RST is a valid response to a\npreviously observed SYN in the correct direction.\n\nCc: stable@vger.kernel.org\nFixes: 9fb9cbb1082d (\"[NETFILTER]: Add nf_conntrack subsystem.\")\nSigned-off-by: Hamza Mahfooz <hamzamahfooz@linux.microsoft.com>\nSigned-off-by: Florian Westphal <fw@strlen.de>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "c82da08586615c77501c43472cd6bb541583cc13"
+      ],
+      "paths": [
+        "net/netfilter/nf_conntrack_proto_tcp.c"
+      ],
+      "sha256": "0cb829651f14ce53275f3b4322a3c158a007304be19712f61e9594a65ef43620",
+      "source": "stable",
+      "subject": "netfilter: conntrack: tcp: do not force CLOSE on invalid-seq RST without direction check",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "f2e6596d10783557aeb9668da2a3b4d19deb2001": {
+      "date": "2026-07-24",
+      "message": "netfilter: bridge: fix stale prevhdr pointer in br_ip6_fragment()\n\ncommit 86f3ce81dd2b4b0aa2c3016c989a943e4b1b643d upstream.\n\nbr_ip6_fragment() gets prevhdr, a pointer into the skb head, from\nip6_find_1stfragopt(), then calls skb_checksum_help().  For a cloned skb\nskb_checksum_help() reallocates the head via pskb_expand_head(), leaving\nprevhdr dangling.  It is later dereferenced in ip6_frag_next(), causing a\nuse-after-free write.\n\nSave prevhdr's offset before skb_checksum_help() and recompute it after,\nlike commit ef0efcd3bd3f (\"ipv6: Fix dangling pointer when ipv6\nfragment\").\n\n  BUG: KASAN: slab-use-after-free in ip6_frag_next (net/ipv6/ip6_output.c:857)\n  Write of size 1 at addr ffff888013ff5016 by task exploit/141\n  Call Trace:\n   ...\n   kasan_report (mm/kasan/report.c:595)\n   ip6_frag_next (net/ipv6/ip6_output.c:857)\n   br_ip6_fragment (net/ipv6/netfilter.c:212)\n   nf_ct_bridge_post (net/bridge/netfilter/nf_conntrack_bridge.c:407)\n   nf_hook_slow (net/netfilter/core.c:619)\n   br_forward_finish (net/bridge/br_forward.c:66)\n   __br_forward (net/bridge/br_forward.c:115)\n   maybe_deliver (net/bridge/br_forward.c:191)\n   br_flood (net/bridge/br_forward.c:245)\n   br_handle_frame_finish (net/bridge/br_input.c:229)\n   br_handle_frame (net/bridge/br_input.c:442)\n   ...\n   packet_sendmsg (net/packet/af_packet.c:3114)\n   ...\n   do_syscall_64 (arch/x86/entry/syscall_64.c:94)\n   entry_SYSCALL_64_after_hwframe (arch/x86/entry/entry_64.S:121)\n  Kernel panic - not syncing: Fatal exception in interrupt\n\nFixes: 764dd163ac92 (\"netfilter: nf_conntrack_bridge: add support for IPv6\")\nCc: stable@vger.kernel.org\nReported-by: AutonomousCodeSecurity@microsoft.com\nSigned-off-by: Xiang Mei (Microsoft) <xmei5@asu.edu>\nSigned-off-by: Florian Westphal <fw@strlen.de>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "e35c048d7511e9d4c2a537b8a231c49606e97c16"
+      ],
+      "paths": [
+        "net/ipv6/netfilter.c"
+      ],
+      "sha256": "a9c243d28938f71d5c6202440701d79d7afbe18614b4588caf2809f1c634dd3e",
+      "source": "stable",
+      "subject": "netfilter: bridge: fix stale prevhdr pointer in br_ip6_fragment()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "f7e698e326b239a91ea15844817551921209e826": {
+      "date": "2026-08-24",
+      "message": "mm/mglru: fix and remove redundant unevictable folio handling\n\nsort_folio() has a shortcut for moving folios that are no longer evictable\nbut are still sitting on a generation list.  However, this shortcut is\nbuggy.  It does not follow the PG_lru usage convention, and it has a more\nserious issue.\n\nUnevictable folios are not threaded on lists[LRU_UNEVICTABLE], so that\nfolio->lru can be reused to hold folio->mlock_count (see the comment in\nlruvec_init()).  Hence lruvec_add_folio() skips the list_add() for them,\nand every other place that turns a folio unevictable initialises\nmlock_count explicitly: lru_add() sets it to 0, __mlock_folio() and\n__mlock_new_folio() set it to !!folio_test_mlocked(folio).  sort_folio()\nsets nothing, and the lru_gen_del_folio() right above it may have already\npoisoned folio->lru via list_del(), so mlock_count ends up aliasing\nLIST_POISON2, which reads as 0x122, i.e.  290.  The result is user\nvisible.  On munlock, __munlock_folio() decrements that bogus count, finds\nit still non-zero and bails out before clearing PG_mlocked, so the folio\nremains unevictable and the Mlocked accounting stays inflated until the\nfolio is freed.\n\nThe shortcut also touches the LRU flags in the wrong order.  It calls\nlru_gen_del_folio() while PG_lru is still set, so a concurrent\nfolio_test_clear_lru() (e.g.  compaction, folio_isolate_lru()) can succeed\non a folio that has already been taken off the generation list, which may\nlead to unexpected behavior.\n\nSo fix it by isolating them as common folios and letting the generic\nshrink path cull them.  This matches the classical LRU behavior, and there\nshould be no visible effect on the generic eviction or isolation behavior.\n\nThere is no performance concern either, such a folio goes through this\nonce, and then it is off the generation lists for good.\n\nLink: https://lore.kernel.org/20260812-mglru-mlock-fix-v2-1-a3fec5853c08@tencent.com\nFixes: ac35a4902374 (\"mm: multi-gen LRU: minimal implementation\")\nSigned-off-by: Kairui Song <kasong@tencent.com>\nReviewed-by: Barry Song <baohua@kernel.org>\nReviewed-by: Baolin Wang <baolin.wang@linux.alibaba.com>\nCc: Axel Rasmussen <axelrasmussen@google.com>\nCc: Brian Geffon <bgeffon@google.com>\nCc: David Hildenbrand <david@kernel.org>\nCc: Jan Alexander Steffens (heftig) <heftig@archlinux.org>\nCc: Johannes Weiner <hannes@cmpxchg.org>\nCc: Lorenzo Stoakes <ljs@kernel.org>\nCc: Michal Hocko <mhocko@kernel.org>\nCc: Oleksandr Natalenko <oleksandr@natalenko.name>\nCc: Shakeel Butt <shakeel.butt@linux.dev>\nCc: Steven Barrett <steven@liquorix.net>\nCc: Suleiman Souhlal <suleiman@google.com>\nCc: Wei Xu <weixugc@google.com>\nCc: Yuanchu Xie <yuanchu@google.com>\nCc: Yu Zhao <yuzhao@google.com>\nCc: <stable@vger.kernel.org>\nSigned-off-by: Andrew Morton <akpm@linux-foundation.org>\n\n",
+      "parents": [
+        "73b5d07990a0e6ea9cdf2c07fa8fbc865d398c1d"
+      ],
+      "paths": [
+        "mm/vmscan.c"
+      ],
+      "sha256": "400717c468b20548a8f2d01c0bd388e3a7707c9dab03b51fc14433dfcfc5fcf0",
+      "source": "mainline",
+      "subject": "mm/mglru: fix and remove redundant unevictable folio handling",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "fcb565966534909377a16be5f7b065db2e25c8b5": {
+      "date": "2026-07-24",
+      "message": "netfilter: ipset: fix order of kfree_rcu() and rcu_assign_pointer()\n\n[ Upstream commit 3ca9982a8882470aa0ac4e8bb9a552b181d1efcd ]\n\nSashiko pointed out that kfree_rcu() was called before\nrcu_assign_pointer() in handling the comment extension.\nFix the order so that rcu_assign_pointer() called first.\n\nFixes: b57b2d1fa53f (\"netfilter: ipset: Prepare the ipset core to use RCU at set level\")\nSigned-off-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Pablo Neira Ayuso <pablo@netfilter.org>\nSigned-off-by: Sasha Levin <sashal@kernel.org>\n\n",
+      "parents": [
+        "7445fe965b7d8756070a40e80f8b73348ccda1d7"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_core.c"
+      ],
+      "sha256": "2262da1436f20cc1f137d26b0492e557a48ac1f83d359c8c8387b75be878a2a3",
+      "source": "stable",
+      "subject": "netfilter: ipset: fix order of kfree_rcu() and rcu_assign_pointer()",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "fdf302e6bea1822a9144a0cc2e8e17527e746162": {
+      "date": "2025-11-11",
+      "message": "gendwarfksyms: Skip files with no exports\n\nStarting with Rust 1.91.0 (released 2025-10-30), in upstream commit\nab91a63d403b (\"Ignore intrinsic calls in cross-crate-inlining cost model\")\n[1][2], `bindings.o` stops containing DWARF debug information because the\n`Default` implementations contained `write_bytes()` calls which are now\nignored in that cost model (note that `CLIPPY=1` does not reproduce it).\n\nThis means `gendwarfksyms` complains:\n\n      RUSTC L rust/bindings.o\n    error: gendwarfksyms: process_module: dwarf_get_units failed: no debugging information?\n\nThere are several alternatives that would work here: conditionally\nskipping in the cases needed (but that is subtle and brittle), forcing\nDWARF generation with e.g. a dummy `static` (ugly and we may need to\ndo it in several crates), skipping the call to the tool in the Kbuild\ncommand when there are no exports (fine) or teaching the tool to do so\nitself (simple and clean).\n\nThus do the last one: don't attempt to process files if we have no symbol\nversions to calculate.\n\n  [ I used the commit log of my patch linked below since it explained the\n    root issue and expanded it a bit more to summarize the alternatives.\n\n      - Miguel ]\n\nCc: stable@vger.kernel.org # Needed in 6.17.y.\nReported-by: Haiyue Wang <haiyuewa@163.com>\nCloses: https://lore.kernel.org/rust-for-linux/b8c1c73d-bf8b-4bf2-beb1-84ffdcd60547@163.com/\nSuggested-by: Miguel Ojeda <ojeda@kernel.org>\nLink: https://lore.kernel.org/rust-for-linux/CANiq72nKC5r24VHAp9oUPR1HVPqT+=0ab9N0w6GqTF-kJOeiSw@mail.gmail.com/\nLink: https://github.com/rust-lang/rust/commit/ab91a63d403b0105cacd72809cd292a72984ed99 [1]\nLink: https://github.com/rust-lang/rust/pull/145910 [2]\nSigned-off-by: Sami Tolvanen <samitolvanen@google.com>\nTested-by: Haiyue Wang <haiyuewa@163.com>\nReviewed-by: Alice Ryhl <aliceryhl@google.com>\nLink: https://patch.msgid.link/20251110131913.1789896-1-ojeda@kernel.org\nSigned-off-by: Miguel Ojeda <ojeda@kernel.org>\n\n",
+      "parents": [
+        "e9a6fb0bcdd7609be6969112f3fbfcce3b1d4a7c"
+      ],
+      "paths": [
+        "scripts/gendwarfksyms/gendwarfksyms.c",
+        "scripts/gendwarfksyms/gendwarfksyms.h",
+        "scripts/gendwarfksyms/symbols.c"
+      ],
+      "sha256": "80bdabd5224661491c27a107a557dd251f1f4678e0bba37b462b169f38177be6",
+      "source": "mainline",
+      "subject": "gendwarfksyms: Skip files with no exports",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    },
+    "ff3cb05289b8a4ef95fa7ea14c7d34818359edbb": {
+      "date": "2026-08-19",
+      "message": "ipv6: fix Route Information option length validation\n\ncommit d1ad8fb2ac6a1afb71dc22d9ae8efb4dda96c824 upstream.\n\nrt6_route_rcv() validates the Route Information option (RFC 4191) length\nagainst the prefix length, but both checks are off by one.\n\nrinfo->length is the ND option length in units of 8 octets and it\n*includes* the 8-byte option header, so an option carrying N bytes of\nprefix has length == 1 + N/8.  RFC 4191 section 2.3 requires length 3\nwhen Prefix Length is greater than 64, and 2 or 3 when it is greater\nthan 0.  The code accepts length >= 2 and length >= 1 respectively.\n\nipv6_addr_prefix() then copies prefix_len/8 bytes out of rinfo->prefix,\nso a Router Advertisement with (prefix_len=128, length=2) or\n(prefix_len=64, length=1) makes the kernel read up to 8 bytes past the\nend of the option.  Those bytes end up in the prefix of the route that\ngets installed, so they are visible to userspace:\n\n  # RA with a Route Information option (prefix_len=128, length=2)\n  # followed by a source link-layer address option, 01 01 de ad be ef ca fe\n  $ ip -6 route show\n  2001:db8:dead:beef:101:dead:beef:cafe via fe80::1234 dev veth0 proto ra\n                     ^^^^^^^^^^^^^^^^^^ the next option, read out of bounds\n\nWhen the Route Information option is the last one in the packet, those\neight bytes come from the skb tail room instead.\n\nReject the option lengths RFC 4191 does not allow.\n\nFixes: 70ceb4f53929 (\"[IPV6]: ROUTE: Add experimental support for Route Information Option in RA (RFC4191).\")\nCc: stable@vger.kernel.org\nSigned-off-by: Yuejie Shi <syjcnss@gmail.com>\nReviewed-by: Ido Schimmel <idosch@nvidia.com>\nLink: https://patch.msgid.link/20260730035310.74584-1-syjcnss@gmail.com\nSigned-off-by: Jakub Kicinski <kuba@kernel.org>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "f92558bbe78d6284fedd053900f82a70f0aa8707"
+      ],
+      "paths": [
+        "net/ipv6/route.c"
+      ],
+      "sha256": "03d5395f51be1ba4438c8abe72498a796e3b521b62f1afe5739114a1f31f0d23",
+      "source": "stable",
+      "subject": "ipv6: fix Route Information option length validation",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    },
+    "ff86ea9b7fdf70564e60436fbee68c96bc459943": {
+      "date": "2026-07-18",
+      "message": "netfilter: ipset: fix race between dump and ip_set_list resize\n\ncommit 7cd9103283b26b917360ec99d7d2f2d761bcf1ab upstream.\n\nThe release path of ip_set_dump_do() and ip_set_dump_done() read\ninst->ip_set_list via ip_set_ref_netlink(), a plain rcu_dereference_raw()\nof the array pointer. These run from netlink_recvmsg() without the nfnl\nmutex and without an RCU read-side critical section.\n\nA concurrent ip_set_create() can grow the array: it publishes the new\narray, calls synchronize_net() and then kvfree()s the old one. Since the\ndump paths read the array outside any RCU reader, synchronize_net() does\nnot wait for them and the old array can be freed while they still index\ninto it, causing a use-after-free.\n\nThe dumped set itself stays pinned via set->ref_netlink, so only the\narray load needs protecting. Take rcu_read_lock() around it, matching\nip_set_get_byname() and __ip_set_put_byindex().\n\n  BUG: KASAN: slab-use-after-free in ip_set_dump_do (net/netfilter/ipset/ip_set_core.c:1697)\n  Read of size 8 at addr ffff88800b5c4018 by task exploit/150\n  Call Trace:\n   ...\n   kasan_report (mm/kasan/report.c:595)\n   ip_set_dump_do (net/netfilter/ipset/ip_set_core.c:1697)\n   netlink_dump (net/netlink/af_netlink.c:2325)\n   netlink_recvmsg (net/netlink/af_netlink.c:1976)\n   sock_recvmsg (net/socket.c:1159)\n   __sys_recvfrom (net/socket.c:2315)\n   ...\n  Oops: general protection fault, probably for non-canonical address ... KASAN NOPTI\n  KASAN: maybe wild-memory-access in range [0x02d6...d0-0x02d6...d7]\n  RIP: 0010:ip_set_dump_do (net/netfilter/ipset/ip_set_core.c:1698)\n  Kernel panic - not syncing: Fatal exception\n\nFixes: 8a02bdd50b2e (\"netfilter: ipset: Fix calling ip_set() macro at dumping\")\nCc: stable@vger.kernel.org\nReported-by: Weiming Shi <bestswngs@gmail.com>\nAssisted-by: Claude:claude-opus-4-8\nSigned-off-by: Xiang Mei <xmei5@asu.edu>\nAcked-by: Jozsef Kadlecsik <kadlec@netfilter.org>\nSigned-off-by: Florian Westphal <fw@strlen.de>\nSigned-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>\n\n",
+      "parents": [
+        "ef2ae10a4582bc92b7e944181bbd2f87f3d30f3a"
+      ],
+      "paths": [
+        "net/netfilter/ipset/ip_set_core.c"
+      ],
+      "sha256": "31fcbc48d15de30c0b14c6c68e5a7ff89c1465e012fb0848eebd3cc9b88ebef3",
+      "source": "stable",
+      "subject": "netfilter: ipset: fix race between dump and ip_set_list resize",
+      "url": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+    }
+  },
+  "files": {
+    "LICENSE": "f6b78c087c3ebdf0f3c13415070dd480a3f35d8fc76f3d02180a407c1c812f79",
+    "patches/0267a9417dfe1342acbdfb8489b593ac4e6fa308.patch": "2fe70b709362c9f59d3389a5c15d0942dc7e85230b016794c32a8bb3c34a9dfa",
+    "patches/0349b7f95c806ea30d558c7fec9502f4470fb1b6.patch": "190f4bdd0de6d2fbe2ca800bcd6858eba330ed37e486c280390b9d39763c87e8",
+    "patches/03cb8cc2961f5f781d12e903782cb3815ed84b1c.patch": "2343a117ca01c18e0d136daed099d4c22bda9a180480c1e162b276dd9567d3d3",
+    "patches/0504d52d05299c1177f2086884343430cdca1f5c.patch": "70513e0879c0bd1339163ef74fc96c21c15786e351ac39f791dee2548a4fa79f",
+    "patches/07b3b83587fb3012619f4439389b64a955fc7836.patch": "19e4904a95199b7ca419b8aa49c0c5028d3cf557322863fa77f87f8937fd887f",
+    "patches/0ae1ac7335ca2328c42fbbe2b71bc9c3fc8e65d9.patch": "518c81da8a1857e173bd783b0c6587b39a00d005df6938fd187f7c8d451e59cd",
+    "patches/0fe4636665d14a258de70b4f3e8248e6d42038f1.patch": "27a596fddc73db5ad63ede803f530bbed43203d1282144c771699c9cbd50ede3",
+    "patches/1509c1ae9185ec7103899967ed788b6eebab3fcc.patch": "ab35e8e1a1ed348d4f9ae6d87cc184fadbf6d75e74303032f9086dae56055f49",
+    "patches/157c0a896127d16466d69729a3e140c29dfbf239.patch": "8a4a240e479b17361fe37ee77c14a03cb28f4d4e08161ec9031474b47a9cc049",
+    "patches/16161444c30d8dff9428abbae42b72ce4e32a932.patch": "cb463a86b80e2dfc7c3ba9be9330df87d19dff2beca8abf5a0ba5fd9ceaaef39",
+    "patches/165258303357e54b75fc19b341ae2a2b7c9e3910.patch": "0294774e7852ba28b20e2357ae3b02dcb9719c133985db3d195aa587cec3c487",
+    "patches/192df376a05c2db15564640f9da7e20907c1fa24.patch": "d72969a59ed2200e2a482429f2b5f9b60cfa6bcb9e6fd5127ee8777d1b12d489",
+    "patches/19999e479c2a38672789e66b4830f43c645ca1f2.patch": "b72d0f4e382326708a9b5759dfe24bc1153141401f26137cc058a3ee56778cc1",
+    "patches/1c206d461c680c3151daa3c89fc26eaf5bf98a7f.patch": "a12f920f7304beef7af1458a9c94f657071f42ec55221985978c0caf4fd75017",
+    "patches/20cb13a523f0a05cb2d0a7d72abae687683712e0.patch": "8613ad5e92d7bcb0e149a875153b98de40ef2f2d81bfd6bf72be9bbd8260407f",
+    "patches/222bc257a151cc1b01d926199a0d5a7ba61d2e53.patch": "c1e7ed42c533360d8f1b925f51ef21fff2e271e0cf88f2c68a7c3c7349af339b",
+    "patches/23d8ea1e303b5f32d883757a4a707e791dbc9808.patch": "b0e6d0a93b1fe2399a494002de5cffedc51f7cb70b2a06c3f6dbda508d634369",
+    "patches/29cf3b31e8cceebceed395b2a0ec7863adabca69.patch": "71f14f0045da9e98aa75305e9cfe2ecfee15a0a83afaa951b8802544f30ae6ac",
+    "patches/2a9f9791653ba5ed3fb45bbffa8d63a7cd5cf706.patch": "dadaf2df59e577d7d5d2b1a3973c1d954ff55db006b217e896376330fe6dcd6a",
+    "patches/367abcacc13a8e2e7624408b7f593bd1e60e49d9.patch": "5617b4b31a0d6eeb6429d106905c9a841277148dbf6413b8e28e286be885ccac",
+    "patches/36e0741833bd823866f8cb9f112f37cea1a70b60.patch": "2df1badb0cdcade9491db2a7088480d9c187fadf26383e39548b8de9adedb9f3",
+    "patches/3ec955713d9617059d2fc8f2816d0b95ace72256.patch": "da1b3a3f0102ffb7abb56afe41e0a4e2e81d3e01c72b85da88283310cb9c777f",
+    "patches/40aa9e1223fd38e65ac72373e642c7638a3b4752.patch": "f1fddf22222022c95f9bec49201b9e579c91abb03619a9e0acfbe23ba3ace861",
+    "patches/44480f7e3f8369671452c0d262831c51aa5a9c20.patch": "4feee51a8e08a5b754d9d5119251d6da72cbee120439e70fb276359e4de81d10",
+    "patches/44e41381591dc5b4ea67a9f170b4ec85c817586e.patch": "1c662891cfcd54fda663be5e6f2697754c4068f35ad0edd59cfd9a5b30dc585a",
+    "patches/454e00cf8ee5aff555ad5865b8c3dbf3731afcc9.patch": "850bfb1085c1d6dd6d29bb3ad72030ef9571bd0dfdff71c52ef41532db1c4b5b",
+    "patches/4c9d9aa809c261dc0490a0e19d675f7e8e4c85bf.patch": "32f357a0074b2ad5403770cfaef89e001824faa01a86d2cf7994e7a0c9df0514",
+    "patches/5161e67c561c4f28a5d9335a6e859b02511de92b.patch": "d7d6be864f7976307698807bb22d15b3bf57f34de6b5d4eedffd79c78b235869",
+    "patches/53ef70a315420ed31581d38343684b3bf9a3c76d.patch": "a59a886f1552c159370987fd30e60055a08eb6f9de0400573cc7a97582bd384c",
+    "patches/550511a2470f6d204fa07b331f048bd2d3c51280.patch": "92a52e5abc7a889c5c6ad4127dfb045b19238e498af95ba16a30c21cc96cb226",
+    "patches/5a28a4b22dde92f9d293b94236314b8d6181dc4a.patch": "8d5327bd98d51ac29a260dc46665f9e808fb545e26fd5029f9a6ea395699ce9e",
+    "patches/5b029dd854f8a6a2f5b6b9c338ae3cc3cbfc0213.patch": "9c114c3b293b4b2f0bbfe1264ad1c5628d41f33dadb6b155c42f2855ffabbdee",
+    "patches/6024f6d0d9b9ca5138bfc4ac6f6e4bdf616e42b3.patch": "bc8af5a86f14c8af04d6da51a46f683d7fed24bcd308edafd3746a9a7d03487f",
+    "patches/603c55e992f8e9b16848835bdafade68fd593c43.patch": "fdd6a88b4d8e9dac55ae8cc8ff4ffff8b129174413faa333ab0867c0b9a949f7",
+    "patches/60cada258dfe3694e15c4539259173c37bd5f1fe.patch": "25dbd225145cba3ea6e9329d7d4cf2d17d3f923232677412e3a5ade5c5eefbd5",
+    "patches/62c719203cb521b64fab74da94a81bdde5c18808.patch": "b713a04a5f39698d51f887b2e0eb7f3a618e19212340603e6a966b9e61c6056f",
+    "patches/6321ebf2a1052306e778410ed1e0229611a69500.patch": "8ca39b4f3f7ae9d6b06e2a381f9a96e5f448c155119daced76378a8c73f4d8c8",
+    "patches/6dab4dec9a49121d079981ac913569f232c06b06.patch": "0c43fe969acba694d15013c429f45cba57742336283356a24f01d2fb7ccd6a33",
+    "patches/6f014bf46faf1645b6336f47390167de5c88e9d1.patch": "5e2c6ca16c9e60586c899641e7283392ae1bf385eb8f75506fb68c7bf403ec6c",
+    "patches/7445fe965b7d8756070a40e80f8b73348ccda1d7.patch": "610719346a283c1f85c7f99380401e60975ed0dec711db1b2bf9566bef844954",
+    "patches/791c91dc7a9dfb2457d5e29b8216a6484b9c4b40.patch": "239cfa21efa781796e50b2a7178b787d4e4f80fd71ce42a7cab880a6b5e31ea0",
+    "patches/7dd01f7d0291583e3e5420c95c7d584e114899bd.patch": "d1dcee68db071b38303b1bee5a4bcdb9be954c1e8e06151389ae412c75291eb5",
+    "patches/7e06a41b36638d514638de468428c14ae79db475.patch": "fbe2c2ba112cf4267ba53ef5dda9b072fa0d913d513a26c129a6cb424ae78b4f",
+    "patches/80600b5d0f3ecb9324120dc95b5e915130f516c5.patch": "89cad23d9b0558ad0186c4c0c19b8f26cc4b18c5fd6eef00306fc1d3202e88a4",
+    "patches/806fcff98c1d7cb3c1dc0015e55ebdbe819e6b08.patch": "76451e7d179d74061c744d048e65fd0937e8aea2117f710dd59af8718d650864",
+    "patches/820e501be8aee4b365d218d83227b314309c5fda.patch": "47a46f8fa39fe9b46bac958ae0cbc6eac78cb29f103798e2d1ccde0361de63f8",
+    "patches/86ab00cf81d44b675bb23db62b88fd76c8ac8cea.patch": "3170eee6f939030334090dd214749ba9e672780b45627ba7c7c5b5b611272514",
+    "patches/889a621272f9b7e19f35efa3d836347b4e209290.patch": "7919fab7a490320064913c72137ac8a4dccc209f24dcfd7dfd8a26b4bd49185d",
+    "patches/8dd8929b71c4f06c614f8f54c2cc070453faae16.patch": "ae680c34781da274d0a854a32d9fecd0c944de849ea5024ce7d13021cb8ccfc5",
+    "patches/8e23114b89e28549393351afde3c87e7b43a0c97.patch": "31ea00b1736a0adf49d14ae83ca33f781908cfe6a69eabf03d5a551a3b040f20",
+    "patches/925628656b73b70930972ccde421de4f758d8650.patch": "df03145dae8f36481b242ec7d335b7e32e6de837a381f804296bb72df3791b11",
+    "patches/9b26518b6896a16b809b1e42986f4ebac7bccc1e.patch": "2a8100cd0bf4fd06e3c891f1ce699c40a0f634649c18f42ceac3d3f86ecb2747",
+    "patches/9cbbac29d752fb5d95e375fa3685a359b89caa0a.patch": "60ddc4c4fd5b60cf5e659144f6326190d620a60367e654b688851e1046a0e562",
+    "patches/a12c0025080e0215b74551a644c8a57f126fd738.patch": "b131ea330c15eabc566d9ca58a84545d9856c729b11d5505b8c48905e3f1dd3b",
+    "patches/a38212687519f2a72f43e62dec1348a690412404.patch": "33c407e9038b238cd02eea0a0573e7ccaf9494a74b417cfbbe9735b690310acc",
+    "patches/a83264d8dfba400b94b87ecf88a3cff896cfc5cc.patch": "0e85c4286b0618418335206fe0cb8e6b8ac02948ce3e2fbc6321984b7390da81",
+    "patches/aba4f94ac1832c7299c33e1b4fe5f87eef6dc8f1.patch": "e8c278364220919e2e46a936083fbbd37bdbde897deb1e355cd0f9c772e218f9",
+    "patches/b0bc1c75f304099347cfc0cc880b556966b54138.patch": "e024c5c7772a934ddcc9ab3ea9aa96c24fe2a5c88ecfd246f7060d8110bdded7",
+    "patches/b885c7783c19c36c7bf899492a0bffcd68afa8c7.patch": "d24081e6b68591782eb8431357716a4fd1b3689c3023e5d12793ca3bb21c31bb",
+    "patches/bbebd9425cad3573d1527441753899b926525a0f.patch": "61ec7dadf284bce0d42306a8b4b3d5dc90a510c21f128748ce2ef73ef9c30f1c",
+    "patches/c710e9bf38e4e71a8db85d26a0f70c0674664207.patch": "11c77aa5f21441a1b8093731bb04ca7818151efb5d6f53813ef7e0f836eebdb7",
+    "patches/c940d1b96248c3081b664ede5418078bdc7c8c07.patch": "28f4274deb53ca06ae6c740b7644d55637724fda9f4b53dbf8f7712ddff4427d",
+    "patches/cfcc465018818fb4f08148a28adb5b0cb40a9ec1.patch": "e88ac8cb2c3fe6a63cda6e3d3c0086186012661f3334fe2733d1d93c487a28ce",
+    "patches/d860974a7e38d35e9e2c4dc8a9f4223b38b6ad99.patch": "451137fb2b3118475e7843bc5d4bf76b6d5df2c06ee42b7f738a61aece0201bd",
+    "patches/d8b96a79622e03813c221450498ca9742704ebf2.patch": "8f6bb148f9cb32ff8c8b4fae1d6067133bc86752a99d6208a9c3f7871f5c0434",
+    "patches/dec2edb7aaf12a8878b3a03172ea8fc277b8eaad.patch": "f4686c5319e071a2d34c6fd5b5718d0027583bc27995f3407a29e52baeb796cf",
+    "patches/df50875c208a1ac90d62d83a4de07b583ecddbf1.patch": "a694028583373491b76073251cfc4551745e904328446553498c2b8971feade5",
+    "patches/e1c345582c979ed44f881dec0b3137d862097c6b.patch": "8b9cf01f6a31d4a6afe992ab247251f347675692e1f7711c69864020ccf1ea17",
+    "patches/ebbebf6cee950d7f1c81990256c0eae9e62572ae.patch": "5c75cc061d7fbb0ac91c616106cfc2ca95ec0672a299bc77918f9b67c81503d2",
+    "patches/f206def4e86d810f927ba1d8e322ea72b29bce58.patch": "0cb829651f14ce53275f3b4322a3c158a007304be19712f61e9594a65ef43620",
+    "patches/f2e6596d10783557aeb9668da2a3b4d19deb2001.patch": "a9c243d28938f71d5c6202440701d79d7afbe18614b4588caf2809f1c634dd3e",
+    "patches/f7e698e326b239a91ea15844817551921209e826.patch": "400717c468b20548a8f2d01c0bd388e3a7707c9dab03b51fc14433dfcfc5fcf0",
+    "patches/fcb565966534909377a16be5f7b065db2e25c8b5.patch": "2262da1436f20cc1f137d26b0492e557a48ac1f83d359c8c8387b75be878a2a3",
+    "patches/fdf302e6bea1822a9144a0cc2e8e17527e746162.patch": "80bdabd5224661491c27a107a557dd251f1f4678e0bba37b462b169f38177be6",
+    "patches/ff3cb05289b8a4ef95fa7ea14c7d34818359edbb.patch": "03d5395f51be1ba4438c8abe72498a796e3b521b62f1afe5739114a1f31f0d23",
+    "patches/ff86ea9b7fdf70564e60436fbee68c96bc459943.patch": "31fcbc48d15de30c0b14c6c68e5a7ff89c1465e012fb0848eebd3cc9b88ebef3"
+  },
+  "format": 1,
+  "inputs": {
+    "manifests": {
+      "patches/backports/kmi6-2026-09-independent/120-f2fs-atomic-retry-data.tsv": "068ede24c41d2f38793d40e53cbae0f116d97961cba0b7f27a5650177b427421",
+      "patches/backports/kmi6-2026-09-independent/140-erofs-sync-decompress-uaf.tsv": "b799574137defbd332801ddf120de60a00669d0e5afa51b8b36019e572aa7395",
+      "patches/backports/kmi6-2026-09-independent/150-ufs-rtc-suspend-race.tsv": "0a26d7af9fd7c72d44eb1e00ef1d3360c4a39b56d5ef6e35e1e8b6f0d3986d20",
+      "patches/backports/kmi6-2026-09-independent/170-ipv4-igmp-timer-uaf.tsv": "9f632a3ff71220de783df9f8db166d7cd6a95a884de872a8f1c61c815529d336",
+      "patches/backports/kmi6-2026-09-independent/180-block-time-race.tsv": "e334bc2c3d4047a2de6136499c463228baef6b61010b405ddcdebea587165ef4",
+      "patches/backports/kmi6-2026-09-independent/190-timer-migration-livelock.tsv": "fe7e3799b38a088ae950e64a0710fae094fd9869fdcae2aa8e74a2fe7eeea57e",
+      "patches/backports/kmi6-2026-09-independent/260-schedutil-hook-init-race.tsv": "0a36ec4d2e81368b7aa3eb08d9083b73a45882cfd9cec4df3f3eb99da2b7db6f",
+      "patches/backports/kmi6-2026-09-independent/300-psi-zero-delta.tsv": "90572f8112ab0d37df9d3998216387cd1ded22d98e2f0c932731ebc2d3a30056",
+      "patches/backports/kmi6-2026-09-independent/310-mglru-proactive-reclaim.tsv": "1b6fcb0657564d608cd704ae3968f8520dd62a2c3f7c84aa6a6a3700cc98f8c3",
+      "patches/backports/kmi6-2026-09-independent/320-f2fs-cached-overwrite.tsv": "d9b929c210ae6368372cfe81be5efa57f3af83b5922565a16c65c3ec86218b29",
+      "patches/backports/kmi6-2026-09-independent/330-eas-runnable-avg.tsv": "0f2f0c1b78bec0fc8fd345b2d0c3cc25c0a0be3287f68900d23956c74d567d7e",
+      "patches/backports/kmi6-2026-09-independent/370-udp-tunnel-segmentation-uaf.tsv": "2dc30815a77d3904014b204a458d701066d9d94d13c59e3039864bbf751f1df5",
+      "patches/backports/kmi6-2026-09-independent/390-ipv6-ndisc-inet6-device-null.tsv": "48ed39c59ae1a49c43bcc3e693ac43ae1a07660c97724c8f0e571088ab7beef1",
+      "patches/backports/kmi6-2026-09-independent/400-hid-set-field-usage-bounds.tsv": "343432cfb14fef65b59462bf8aa5ed94bf044003efaec944c0d384470c1fbf85",
+      "patches/backports/kmi6-2026-09-independent/420-futex-robust-exit-race.tsv": "60405e0bfddcb924eda868d0a820d23538bf58df1b8118386b21ac4314fe4d18",
+      "patches/backports/kmi6-2026-09-independent/440-ipv6-route-info-length.tsv": "cb5c9fe04a8410605f1d9d3718b3cec64b31846bbca900a4250c551bea536d4a",
+      "patches/backports/kmi6-2026-09-independent/450-conntrack-invalid-rst-direction.tsv": "44aaea648f99ff1c0757f039ff4372cecf8d7f253c82ff2e3f4c991dd2b5f9fb",
+      "patches/backports/kmi6-2026-09-independent/460-f2fs-inline-xattr-bounds.tsv": "a53f65a9a4f7878f06e67c49bfa5ab5d4a599e5f41d2c733558143ad5b2ce44c",
+      "patches/backports/kmi6-2026-09-independent/470-f2fs-compress-cache-inode.tsv": "b61c5aee9535536299ecf1bf214138aa6188b245e8ae547873ffc96a5229c4e4",
+      "patches/backports/kmi6-2026-09-independent/480-f2fs-orphan-entry-count.tsv": "dae9eca05cbc5ea0b715b863ebb3f66f788ac6cd213d05758842dc31203eb488",
+      "patches/backports/kmi6-2026-09-independent/530-inet-fragment-gso.tsv": "0891e92cc12820a830501d2648723bec1f4535a6bc410dd6d2196743ad7c6678",
+      "patches/backports/kmi6-2026-09-independent/540-gro-big-tcp.tsv": "f3ee5d7f2bb54e946e73aadaeaea8b1ffc43f23eaa8a9556158a30b97aae4c02",
+      "patches/backports/kmi6-2026-09-independent/550-ipv4-fragment-mtu.tsv": "b4a148accd1bf8331434942f47f1098cf32cf4a11768cf9bcefbf1abde819b6b",
+      "patches/backports/kmi6-2026-09-independent/560-xfrm-dst-cache.tsv": "a315ef7ad50eb62d45bfe73aabb16cb260b23426a0fef0625deb19688e996340",
+      "patches/backports/kmi6-2026-09-independent/570-bpf-linked-reg-delta.tsv": "3db711c84432e3994cef4c2b016ee1c0568b692b34087f2f84855d49d0b4679b",
+      "patches/backports/kmi6-2026-09-independent/580-xfrm-state-mtu.tsv": "74d87e347655f090a43859b96125c86b675072d17c9b6f352a969abf3aaf8999",
+      "patches/backports/kmi6-2026-09-independent/590-xfrm-state-cache.tsv": "d9f09042c3a6b2f9fd1c7bdb1dc2f953712c1e43dd6109a53d090be51d3b7261",
+      "patches/backports/kmi6-2026-09-independent/610-bridge-ipv6-fragment.tsv": "e83fdcce937b2b0e4f52053265a9acbfa75d267563a9556639d62c80af917035",
+      "patches/backports/kmi6-2026-09-independent/620-conntrack-ipv6-mac-header.tsv": "5335a9e481011811ce8f6956cb951e59f423ab87fda0641e26fac000565f4cbc",
+      "patches/backports/kmi6-2026-09-independent/630-filemap-read-batch.tsv": "964d40440bf90d5586b5a29364595a3cbe517fe4e9521163be1106ceb782bd2c",
+      "patches/backports/kmi6-2026-09-independent/640-f2fs-nat-dirty-chain.tsv": "cea3bdd0c7a00ef4e490431023073a170a335b551bdeb4381cee9b331290c45c",
+      "patches/backports/kmi6-2026-09-independent/650-gendwarfksyms-empty-exports.tsv": "cb249b5837b6f5a1a20bf3bbc41864a1df4bfc46f738381b31f459920b5962e0",
+      "patches/backports/kmi6-2026-09-independent/660-mglru-unevictable.tsv": "8d0c762d2fdb9f8e55a1a4169418b8419a31dc271d0d4e969dc5bbe96f706ed1",
+      "patches/backports/kmi6-2026-09-independent/670-kallsyms-token-index.tsv": "6bb27338629d50e660d8392380d4ee590e7fe8e98a3679a3034f72338341a119",
+      "patches/backports/kmi6-2026-09-independent/680-kbuild-probe-cache.tsv": "8934dff0f89f2649285811545bd7f50bac2bcc8d5498dfb04f564b4e14ecf4d8",
+      "patches/backports/kmi6-2026-09-independent/900-block-submit-bio-plug.tsv": "9520f4fada6c2394ce2abb30ad3a75ad4a7d52834bc38a2a37a13914367d600e",
+      "patches/backports/kmi6-2026-09-selected-backports.tsv": "baae86358dd75a07f4388d5cf6ef94b4d33b8d4b885bb6f72fb9e730b0fa63fd"
+    },
+    "pins": {
+      "AOSP_BACKPORT_AUDIT_BASE_COMMIT": "0b90ebc7cfc914b9353f3d6898b8b65c35e8bc28",
+      "AOSP_BACKPORT_AUDIT_REFS": "android16-6.12-2025-07:0a132520574c9f3530effc59e257add27d6f51d3 android16-6.12-2025-08:66d1df7d77519381eb34e51ff23f79f89778152e android16-6.12-2025-09:fbe96919863ffe4964854cd101106a4980c5a36b android16-6.12-2025-12:09eda8c8505ac19be9c4e063afa1d351c1ca9fe2 android16-6.12-2026-03:1e93077a67e1d95ec058301a570ac7aa72d01601 android16-6.12-2026-06_r8:82a2ca6cbee492b7812547877238bc89e4968da4 android16-6.12-2026-06_r19:4f69fc7b210c4319e69b69cd861e6efa5b096e2a android16-6.12-lts:4282e8bdc8cd943bfc8e6310b90cef57f16244ea android16-6.12:8667f8e26c47461d89c228b7bf4b6bffea05f788 android16-6.12-sp:5c5f2fea42dd4cc5ae1002945d86e305c09d3262 android16-6.12-desktop:b03934ac487e89b4c77ed7755bda42f010560ed1 android16-6.12-desktop-bluey:d9bb8c2c71e58fc370c7c5437a0e058361602981 android16-6.12-desktop-cl-dispatcher:ee35fccb8f791fddb8ff780e0b1adff5d17945f2 android16-6.12-kminext:d32bfdf6c3d809458c048ad6694ba52e9b6c7440 android-mainline:19466c7172f41a0bc2f55944ff46b09977ef2a42",
+      "AOSP_BACKPORT_AUDIT_SHALLOW_SINCE": "2023-10-04",
+      "AOSP_BACKPORT_AUDIT_SOURCE_DIR": "sources/aosp_common_backport_audit",
+      "BACKPORT_AUDIT_SNAPSHOT": "2026-08-28",
+      "BLKCG_RSTAT_RELEASE_PATCH_ID": "5149120b23c377e425b11bfdcb1933e39245a1c7",
+      "BLKCG_RSTAT_RELEASE_STABLE_COMMIT": "bbebd9425cad3573d1527441753899b926525a0f",
+      "BLK_WBT_DONE_FAST_PATH_AOSP_REF": "android-mainline",
+      "BLK_WBT_DONE_FAST_PATH_COMMIT": "d8b96a79622e03813c221450498ca9742704ebf2",
+      "BLK_WBT_DONE_FAST_PATH_COMMIT_DATE": "2025-08-11",
+      "BLK_WBT_DONE_FAST_PATH_PATCH_ID": "097d27325d53feb894b26bb0c7e152fca314e7b9",
+      "COMMON_COMMIT": "aa556307b679df7ced0cc644068a529280dbc412",
+      "COMMON_REPO": "https://android.googlesource.com/kernel/common",
+      "ENABLE_BACKPORT_AUDIT": "1",
+      "ENABLE_BLKCG_RSTAT_RELEASE_FIX": "1",
+      "ENABLE_BLK_WBT_DONE_FAST_PATH": "1",
+      "ENABLE_F2FS_ACL_ENTRY_BOUNDS_FIX": "1",
+      "ENABLE_F2FS_DIO_OVERWRITE_FAST_PATH": "1",
+      "ENABLE_F2FS_FOREGROUND_GC_DEADLOCK_FIX": "1",
+      "ENABLE_F2FS_LISTXATTR_BOUNDS_FIX": "1",
+      "ENABLE_IPV6_MLD_DELAYED_WORK_UAF_FIX": "1",
+      "ENABLE_IPV6_MLD_UAF_FIX": "1",
+      "ENABLE_MEMCG_RSTAT_FAST_PATH": "1",
+      "ENABLE_SELECTED_BACKPORTS": "1",
+      "ENABLE_TCP_RECV_MSTAMP_FAST_PATH": "1",
+      "ENABLE_TIMER_BASE_FAST_PATH": "1",
+      "F2FS_ACL_ENTRY_BOUNDS_PATCH_ID": "3021795cf81293828302c01bb7d52bb4d52a7259",
+      "F2FS_ACL_ENTRY_BOUNDS_STABLE_COMMIT": "aba4f94ac1832c7299c33e1b4fe5f87eef6dc8f1",
+      "F2FS_DIO_OVERWRITE_FAST_PATH_AOSP_REF": "android-mainline",
+      "F2FS_DIO_OVERWRITE_FAST_PATH_COMMIT": "d860974a7e38d35e9e2c4dc8a9f4223b38b6ad99",
+      "F2FS_DIO_OVERWRITE_FAST_PATH_COMMIT_DATE": "2026-01-31",
+      "F2FS_DIO_OVERWRITE_FAST_PATH_PATCH_ID": "fec231f96375f0622cf9bd9427ef2baf5614ac03",
+      "F2FS_FOREGROUND_GC_DEADLOCK_PATCH_ID": "8d86d1f0ff47ad109628af8462bd4506c81dd4f6",
+      "F2FS_FOREGROUND_GC_DEADLOCK_STABLE_COMMIT": "44480f7e3f8369671452c0d262831c51aa5a9c20",
+      "F2FS_FOREGROUND_GC_PATCH": "patches/backports/f2fs-foreground-gc-deadlock-r21.patch",
+      "F2FS_FOREGROUND_GC_PATCH_ID": "70442d9fb39ac24622e33231473817e5dc60249b",
+      "F2FS_FOREGROUND_GC_PATCH_SHA256": "fc60fc9fa56bf306ddfc742087585148110550166a782f0aa49f7429d68e199d",
+      "F2FS_GC_MERGE_DEADLOCK_PATCH_ID": "f1e7da7bf78fadbfd5f41ae8f1d1b196ee96b98d",
+      "F2FS_GC_MERGE_DEADLOCK_STABLE_COMMIT": "b885c7783c19c36c7bf899492a0bffcd68afa8c7",
+      "F2FS_LISTXATTR_BOUNDS_PATCH_ID": "daaf1f38e2ef4939e6981e7a563c1a488225a11c",
+      "F2FS_LISTXATTR_BOUNDS_STABLE_COMMIT": "7dd01f7d0291583e3e5420c95c7d584e114899bd",
+      "INDEPENDENT_120_F2FS_ATOMIC_RETRY_DATA_SHA256": "068ede24c41d2f38793d40e53cbae0f116d97961cba0b7f27a5650177b427421",
+      "INDEPENDENT_140_EROFS_SYNC_DECOMPRESS_UAF_SHA256": "b799574137defbd332801ddf120de60a00669d0e5afa51b8b36019e572aa7395",
+      "INDEPENDENT_150_UFS_RTC_SUSPEND_RACE_SHA256": "0a26d7af9fd7c72d44eb1e00ef1d3360c4a39b56d5ef6e35e1e8b6f0d3986d20",
+      "INDEPENDENT_170_IPV4_IGMP_TIMER_UAF_SHA256": "9f632a3ff71220de783df9f8db166d7cd6a95a884de872a8f1c61c815529d336",
+      "INDEPENDENT_180_BLOCK_TIME_RACE_SHA256": "e334bc2c3d4047a2de6136499c463228baef6b61010b405ddcdebea587165ef4",
+      "INDEPENDENT_190_TIMER_MIGRATION_LIVELOCK_SHA256": "fe7e3799b38a088ae950e64a0710fae094fd9869fdcae2aa8e74a2fe7eeea57e",
+      "INDEPENDENT_260_SCHEDUTIL_HOOK_INIT_RACE_SHA256": "0a36ec4d2e81368b7aa3eb08d9083b73a45882cfd9cec4df3f3eb99da2b7db6f",
+      "INDEPENDENT_300_PSI_ZERO_DELTA_SHA256": "90572f8112ab0d37df9d3998216387cd1ded22d98e2f0c932731ebc2d3a30056",
+      "INDEPENDENT_310_MGLRU_PROACTIVE_RECLAIM_SHA256": "1b6fcb0657564d608cd704ae3968f8520dd62a2c3f7c84aa6a6a3700cc98f8c3",
+      "INDEPENDENT_320_F2FS_CACHED_OVERWRITE_SHA256": "d9b929c210ae6368372cfe81be5efa57f3af83b5922565a16c65c3ec86218b29",
+      "INDEPENDENT_330_EAS_RUNNABLE_AVG_SHA256": "0f2f0c1b78bec0fc8fd345b2d0c3cc25c0a0be3287f68900d23956c74d567d7e",
+      "INDEPENDENT_370_UDP_TUNNEL_SEGMENTATION_UAF_SHA256": "2dc30815a77d3904014b204a458d701066d9d94d13c59e3039864bbf751f1df5",
+      "INDEPENDENT_390_IPV6_NDISC_INET6_DEVICE_NULL_SHA256": "48ed39c59ae1a49c43bcc3e693ac43ae1a07660c97724c8f0e571088ab7beef1",
+      "INDEPENDENT_400_HID_SET_FIELD_USAGE_BOUNDS_SHA256": "343432cfb14fef65b59462bf8aa5ed94bf044003efaec944c0d384470c1fbf85",
+      "INDEPENDENT_420_FUTEX_ROBUST_EXIT_RACE_SHA256": "60405e0bfddcb924eda868d0a820d23538bf58df1b8118386b21ac4314fe4d18",
+      "INDEPENDENT_440_IPV6_ROUTE_INFO_LENGTH_SHA256": "cb5c9fe04a8410605f1d9d3718b3cec64b31846bbca900a4250c551bea536d4a",
+      "INDEPENDENT_450_CONNTRACK_INVALID_RST_DIRECTION_SHA256": "44aaea648f99ff1c0757f039ff4372cecf8d7f253c82ff2e3f4c991dd2b5f9fb",
+      "INDEPENDENT_460_F2FS_INLINE_XATTR_BOUNDS_SHA256": "a53f65a9a4f7878f06e67c49bfa5ab5d4a599e5f41d2c733558143ad5b2ce44c",
+      "INDEPENDENT_470_F2FS_COMPRESS_CACHE_INODE_SHA256": "b61c5aee9535536299ecf1bf214138aa6188b245e8ae547873ffc96a5229c4e4",
+      "INDEPENDENT_480_F2FS_ORPHAN_ENTRY_COUNT_SHA256": "dae9eca05cbc5ea0b715b863ebb3f66f788ac6cd213d05758842dc31203eb488",
+      "INDEPENDENT_530_INET_FRAGMENT_GSO_SHA256": "0891e92cc12820a830501d2648723bec1f4535a6bc410dd6d2196743ad7c6678",
+      "INDEPENDENT_540_GRO_BIG_TCP_SHA256": "f3ee5d7f2bb54e946e73aadaeaea8b1ffc43f23eaa8a9556158a30b97aae4c02",
+      "INDEPENDENT_550_IPV4_FRAGMENT_MTU_SHA256": "b4a148accd1bf8331434942f47f1098cf32cf4a11768cf9bcefbf1abde819b6b",
+      "INDEPENDENT_560_XFRM_DST_CACHE_SHA256": "a315ef7ad50eb62d45bfe73aabb16cb260b23426a0fef0625deb19688e996340",
+      "INDEPENDENT_570_BPF_LINKED_REG_DELTA_SHA256": "3db711c84432e3994cef4c2b016ee1c0568b692b34087f2f84855d49d0b4679b",
+      "INDEPENDENT_580_XFRM_STATE_MTU_SHA256": "74d87e347655f090a43859b96125c86b675072d17c9b6f352a969abf3aaf8999",
+      "INDEPENDENT_590_XFRM_STATE_CACHE_SHA256": "d9f09042c3a6b2f9fd1c7bdb1dc2f953712c1e43dd6109a53d090be51d3b7261",
+      "INDEPENDENT_610_BRIDGE_IPV6_FRAGMENT_SHA256": "e83fdcce937b2b0e4f52053265a9acbfa75d267563a9556639d62c80af917035",
+      "INDEPENDENT_620_CONNTRACK_IPV6_MAC_HEADER_SHA256": "5335a9e481011811ce8f6956cb951e59f423ab87fda0641e26fac000565f4cbc",
+      "INDEPENDENT_630_FILEMAP_READ_BATCH_SHA256": "964d40440bf90d5586b5a29364595a3cbe517fe4e9521163be1106ceb782bd2c",
+      "INDEPENDENT_640_F2FS_NAT_DIRTY_CHAIN_SHA256": "cea3bdd0c7a00ef4e490431023073a170a335b551bdeb4381cee9b331290c45c",
+      "INDEPENDENT_650_GENDWARFKSYMS_EMPTY_EXPORTS_SHA256": "cb249b5837b6f5a1a20bf3bbc41864a1df4bfc46f738381b31f459920b5962e0",
+      "INDEPENDENT_660_MGLRU_UNEVICTABLE_SHA256": "8d0c762d2fdb9f8e55a1a4169418b8419a31dc271d0d4e969dc5bbe96f706ed1",
+      "INDEPENDENT_670_KALLSYMS_TOKEN_INDEX_SHA256": "6bb27338629d50e660d8392380d4ee590e7fe8e98a3679a3034f72338341a119",
+      "INDEPENDENT_680_KBUILD_PROBE_CACHE_SHA256": "8934dff0f89f2649285811545bd7f50bac2bcc8d5498dfb04f564b4e14ecf4d8",
+      "INDEPENDENT_900_BLOCK_SUBMIT_BIO_PLUG_SHA256": "9520f4fada6c2394ce2abb30ad3a75ad4a7d52834bc38a2a37a13914367d600e",
+      "IPV6_MLD_DELAYED_WORK_COMMIT_DATE": "2026-07-24",
+      "IPV6_MLD_DELAYED_WORK_OFFICIAL_PATCH_ID": "4fcf3ce5ec83da4c8203e344d896802035700c78",
+      "IPV6_MLD_DELAYED_WORK_PATCH": "patches/backports/ipv6-mld-delayed-work-uaf-r21.patch",
+      "IPV6_MLD_DELAYED_WORK_PATCH_ID": "8d28904741b04eefe83489706946e55a0682fe08",
+      "IPV6_MLD_DELAYED_WORK_PATCH_SHA256": "7bd3339c3a5db6b1aa034585a5bb5eb53d90a0ac98775e5bdfc941547d5c1c5b",
+      "IPV6_MLD_DELAYED_WORK_STABLE_COMMIT": "ebbebf6cee950d7f1c81990256c0eae9e62572ae",
+      "IPV6_MLD_DELAYED_WORK_UPSTREAM_COMMIT": "9b26518b6896a16b809b1e42986f4ebac7bccc1e",
+      "IPV6_MLD_UAF_FIX_AOSP_REF": "android-mainline",
+      "IPV6_MLD_UAF_FIX_COMMIT": "791c91dc7a9dfb2457d5e29b8216a6484b9c4b40",
+      "IPV6_MLD_UAF_FIX_COMMIT_DATE": "2026-06-04",
+      "IPV6_MLD_UAF_FIX_PATCH_ID": "1358ebc3d619657f50c2f0f50f5408f60ea5b732",
+      "KBUILD_AUDIT_BASE_COMMIT": "36d4a11b56aa98da4b4652a2e34d229ffcf36070",
+      "KBUILD_AUDIT_COMMIT": "a98db7418797bc27bef53c861b97ac748f598414",
+      "KBUILD_AUDIT_REF": "kbuild-next-speedups",
+      "KBUILD_AUDIT_REPO": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/kbuild/linux",
+      "KBUILD_AUDIT_SOURCE_DIR": "sources/linux_kbuild_audit",
+      "LINUX_MAINLINE_AUDIT_BASE_COMMIT": "adc218676eef25575469234709c2d87185ca223a",
+      "LINUX_MAINLINE_AUDIT_COMMIT": "1b78070aaef63512688aebfbc82365ef9d6660f1",
+      "LINUX_MAINLINE_AUDIT_REPO": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+      "LINUX_MAINLINE_AUDIT_SOURCE_DIR": "sources/linux_mainline_audit",
+      "LINUX_STABLE_AUDIT_BASE_COMMIT": "ff2177382799753070b71747f646963147eabc7c",
+      "LINUX_STABLE_AUDIT_COMMIT": "f717995cb7dcd8998ab15516b8006aea09cfde0d",
+      "LINUX_STABLE_AUDIT_REF": "linux-6.12.y",
+      "LINUX_STABLE_AUDIT_REPO": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git",
+      "LINUX_STABLE_AUDIT_SOURCE_DIR": "sources/linux_stable_6.12_audit",
+      "LINUX_STABLE_STANDALONE_COMMITS": "03cb8cc2961f5f781d12e903782cb3815ed84b1c",
+      "MEMCG_RSTAT_FAST_PATH_AOSP_REF": "android-mainline",
+      "MEMCG_RSTAT_FAST_PATH_COMMIT": "60cada258dfe3694e15c4539259173c37bd5f1fe",
+      "MEMCG_RSTAT_FAST_PATH_COMMIT_DATE": "2025-05-11",
+      "MEMCG_RSTAT_FAST_PATH_PATCH_ID": "5b12701394b4f6a128f5456e3bd8fed4f8740c27",
+      "SELECTED_BACKPORT_MANIFEST": "patches/backports/kmi6-2026-09-selected-backports.tsv",
+      "SELECTED_BACKPORT_MANIFEST_SHA256": "baae86358dd75a07f4388d5cf6ef94b4d33b8d4b885bb6f72fb9e730b0fa63fd",
+      "TCP_RECV_MSTAMP_FAST_PATH_AOSP_REF": "android-mainline",
+      "TCP_RECV_MSTAMP_FAST_PATH_COMMIT": "0ae1ac7335ca2328c42fbbe2b71bc9c3fc8e65d9",
+      "TCP_RECV_MSTAMP_FAST_PATH_COMMIT_DATE": "2025-10-27",
+      "TCP_RECV_MSTAMP_FAST_PATH_PATCH_ID": "66387ee17b01507a8f2a2b6537c9f7e22c86b509",
+      "TIMER_BASE_FAST_PATH_COMMIT": "3ec955713d9617059d2fc8f2816d0b95ace72256",
+      "TIMER_BASE_FAST_PATH_COMMIT_DATE": "2025-01-16",
+      "TIMER_BASE_FAST_PATH_PATCH_ID": "68dca003ed5b13fb40d3b777155c6568438563ef"
+    }
+  },
+  "kind": "backports",
+  "producer": {
+    "files": {
+      "init.sh": "066f18ee80e6c84416a72515ded085bd1c19ea3c398a517090312b651b2fc6a8",
+      "patch.sh": "66ef96a307a02571b6e122addf7169dfaee6a4b0dc81a7c938f3bc08cf92a36e",
+      "tools/backport_manifest.sh": "180d9c6ed083db0c7780cab67d4bbca33b1b64127a6cea1dfcbbf327e6d51b2b",
+      "tools/ci_dependencies.py": "5ddf11bc23c678b1a5eef8ba5fd86bee818a00bf15f2007c0dc25fd6f33cca08",
+      "tools/independent_backports.sh": "d3b2e5369c1dcbf0feeead1a240df9f0d8256e7f7d9794b203e94ea863ec9961",
+      "tools/tree_sha256.py": "254f505da83ba24b0f522daf5a0035de1b693e0a8be4332d36d5ce1ad138e02c"
+    },
+    "project_commit": "3fc59ff33c4748298462b1db44c4e4ffd6cc4508"
+  }
+}

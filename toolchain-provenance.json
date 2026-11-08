@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "inputs": {
+    "AOSP_BUILD_TOOLS_COMMIT": "65847ca9e3668584f4079698b93bb3ff2a60ed8c",
+    "AOSP_BUILD_TOOLS_REPO": "https://android.googlesource.com/kernel/prebuilts/build-tools",
+    "AOSP_CLANG_COMMIT": "747f0cceb48f48bf7cf497a3e01af1389266904b",
+    "AOSP_CLANG_REPO": "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86",
+    "AOSP_RUST_COMMIT": "a459ccb7fa167e620b6290f976b49ca4f22b3e81",
+    "AOSP_RUST_REPO": "https://android.googlesource.com/platform/prebuilts/rust-toolchain/linux-x86",
+    "CI_BINDGEN_GIT_BLOB": "38e38f0045e2617f9f6f37e8e183def8e2e413d9",
+    "CI_BINDGEN_SHA256": "3c6a59f495350c19aace38b203fa9403e40068b346ec7b71f7b5e8a65bdf34fb",
+    "CI_BINDGEN_URL": "https://android.googlesource.com/platform/prebuilts/clang-tools/+/6cf10f22dc76e430b5f5afd1eed77b09752ff4af/linux-x86/bin/bindgen?format=TEXT",
+    "CI_BINDGEN_VERSION": "0.72.1",
+    "CI_BUILD_TOOLS_GIT_TREE": "2367fcc2bd48fac2179854dca54a8580cd1bed0a",
+    "CI_BUILD_TOOLS_LEAF_TREE_SHA256": "733890dbb262fc011a783ad03e880ba5b1f2a5bd548f31716788e643c9c6dfcf",
+    "CI_BUILD_TOOLS_SUBTREE": "linux_musl-x86",
+    "CI_CLANG_GIT_TREE": "44e59376d6231e87e4ba5545c6baa619b6d4ad54",
+    "CI_CLANG_LEAF_TREE_SHA256": "87c6b7df11ec0bdb3824bf3b69bc1b10b3c76fbb24ea2c8026b619160f3489fe",
+    "CI_CLANG_REVISION": "r596125",
+    "CI_CLANG_VERSION_LINE": "Android (15682573, +pgo, +bolt, +lto, +mlgo, based on r596125) clang version 22.0.2 (https://android.googlesource.com/toolchain/llvm-project de03d430485c884861198b25459851f429cbdbad)",
+    "CI_HOST_BC_GIT_BLOB": "ef984bd0e1a283c675340259f69c3d34561ecaa5",
+    "CI_HOST_BC_SHA256": "6d4b9ea764bb46875af0d1390b66f693dba6b3dc0ba9a373df66a360f2bbfb1f",
+    "CI_HOST_BC_URL": "https://android.googlesource.com/platform/prebuilts/build-tools/+/39cdb1dc629f3166dffea6b83e95aa50aeeb7e28/linux-x86/bin/gavinhoward-bc?format=TEXT",
+    "CI_LLD_VERSION_TEXT": "LLD 22.0.2 (/mnt/disks/build-disk/src/googleplex-android/llvm-r596125-release/out/llvm-project/llvm de03d430485c884861198b25459851f429cbdbad)",
+    "CI_RUSTC_COMMIT_HASH": "2d8144b7880597b6e6d3dfd63a9a9efae3f533d3",
+    "CI_RUSTC_RELEASE": "1.97.0-dev",
+    "CI_RUST_GIT_TREE": "116415464d68389765f1273c52a790060c71c791",
+    "CI_RUST_LEAF_TREE_SHA256": "69a20cbed2e2253543c0fcd102e149488659099d507a2572a4aab62ed3f756d7",
+    "CI_RUST_SUBTREE": "1.97.0",
+    "CI_RUST_TOOLCHAIN_VERSION": "16161252-linux-x86",
+    "CI_TOOLCHAIN_TREE_SHA256": "9ac803933946fd3dff326f8da8853fc5b23ae7da613f6ceb611d8cc5587bf985"
+  },
+  "kind": "toolchain",
+  "producer": {
+    "files": {
+      "init.sh": "066f18ee80e6c84416a72515ded085bd1c19ea3c398a517090312b651b2fc6a8",
+      "patch.sh": "66ef96a307a02571b6e122addf7169dfaee6a4b0dc81a7c938f3bc08cf92a36e",
+      "tools/backport_manifest.sh": "180d9c6ed083db0c7780cab67d4bbca33b1b64127a6cea1dfcbbf327e6d51b2b",
+      "tools/ci_dependencies.py": "5ddf11bc23c678b1a5eef8ba5fd86bee818a00bf15f2007c0dc25fd6f33cca08",
+      "tools/independent_backports.sh": "d3b2e5369c1dcbf0feeead1a240df9f0d8256e7f7d9794b203e94ea863ec9961",
+      "tools/tree_sha256.py": "254f505da83ba24b0f522daf5a0035de1b693e0a8be4332d36d5ce1ad138e02c"
+    },
+    "project_commit": "3fc59ff33c4748298462b1db44c4e4ffd6cc4508"
+  }
+}
