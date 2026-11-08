@@ -43,6 +43,29 @@ Release：`ci-deps-v1-3fc59ff`，制作代码来自主项目固定提交 [`3fc59
 
 主项目以受版本控制的摘要接受依赖，并执行内容、工具身份、补丁应用与构建检查。更新依赖时重新审计固定官方输入，在干净环境复核后发布新版本，保留既有版本。
 
+## AK3 模板与固定 OTA 输入
+
+`build-inputs-v1-d082477` 的迁移来源为主项目提交 [`d082477a5979db3d7504c4599df2851d21a1a453`](https://github.com/LunaKernel/android_kernel_xiaomi_sm8850/tree/d082477a5979db3d7504c4599df2851d21a1a453)。`ak3_template/` 的 9 个文件按该提交的 Git blob 原字节迁入，保留 `LICENSE`、`SOURCE.md` 与 `luna.patch`。AnyKernel3 脚本上游为 [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3)，固定提交 `41f04bdb4ee30a44e429c2c1131d5e8bb32b15f1`；arm64 工具来源另见模板的 `SOURCE.md`。
+
+在 Linux 上从本仓库的 LF 源码检出重建模板包，仅需 Python 3 标准库，无需主仓、网络或预制刷机 ZIP：
+
+```bash
+mkdir -p output
+mkdir output/build-inputs-v1-d082477
+python3 -I tools/pack_ak3.py --output output/build-inputs-v1-d082477/ak3-template.tar.gz
+```
+
+归档仅含 `ak3_template/` 源码目录，文件权限固定为 `0644`、目录为 `0755`，tar 使用 USTAR、uid/gid/mtime 为 0、用户名和组名为空；gzip 文件名为空、mtime 为 0、压缩级别为 6。制作入口拒绝覆盖已有文件。BusyBox、MagiskBoot 和 Image 不包含在模板包内，仍由主项目校验并组装。
+
+| 资产 | 字节数 | SHA-256 |
+| --- | --- | --- |
+| `ak3-template.tar.gz` | 20429 | `cd9eca87e005b67f73f8a6fb196baa29626fe314ffc719a35414eaa731692317` |
+| `system_dlkm-os4.0.6.0.img` | 17281024 | `7775538c8ff97ebdcb6958d0ce9c9f8eca67ae8d7e8867b45ce5dd701bba5af0` |
+
+完整 `ak3_template/` 树按主项目 `tools/tree_sha256.py` 格式、实际 Linux `0644` 文件计算的 SHA-256 为 `d5b9b8ae6d557a6ce7df7e614381a170d7179764b441c6993ca7decefc40c7be`。主项目继续独立固定并校验归档、目录与镜像摘要。
+
+OTA 资产直接复制自上述主项目提交的 `ci/inputs/os4.0.6.0/system_dlkm.img`（Git blob `3c9ee19348b6819718f7ff6c8e6f493a2818909a`），大小与 SHA-256 匹配该提交的公开 `.env`。主项目将其记录为小米 17 `pudding` 的 `OS4.0.6.0.XPCCNXM` 同包分区镜像。镜像按原字节作为项目兼容性验证资产托管，版权与许可证归原权利人；文件置于忽略的 `output/` 目录作为 Release 资产，不进入依赖 Git 或刷机包。AnyKernel3 的许可原文保留在 `ak3_template/LICENSE`。既有工具链与回移 v1 资产及摘要保持不变。
+
 ## 上游声明与源码定位
 
 本仓库制作与审计脚本采用 [GPL-2.0-only](LICENSE)，上游组件保留各自许可证。
