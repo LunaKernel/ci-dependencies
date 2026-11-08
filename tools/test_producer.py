@@ -121,7 +121,7 @@ class ProducerTest(unittest.TestCase):
         self.assertEqual(data['producer']['project_commit'], self.commit)
         self.assertTrue((self.work / 'backports.tar.gz').is_file())
         self.assertEqual(git(self.root, 'status', '--porcelain'), '')
-        self.assertFalse((self.root / 'init.sh').exists())
+        self.assertFalse((self.root / 'patches/init.sh').exists())
         self.assertFalse((self.root / 'patches/patch.sh').exists())
 
     def test_toolchain_export_across_filesystems(self):
