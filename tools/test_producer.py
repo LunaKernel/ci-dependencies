@@ -36,8 +36,10 @@ class ProducerTest(unittest.TestCase):
         self.work = self.base / 'work'
         self.root.mkdir()
         (self.root / 'tools').mkdir()
-        for name in ('ci_dependencies.py', 'tree_sha256.py', 'backport_manifest.sh'):
+        for name in ('ci_dependencies.py', 'tree_sha256.py'):
             shutil.copyfile(PROJECT / 'tools' / name, self.root / 'tools' / name)
+        (self.root / 'patches').mkdir()
+        shutil.copyfile(PROJECT / 'patches/backport_manifest.sh', self.root / 'patches/backport_manifest.sh')
         upstream = self.base / 'upstream'
         upstream.mkdir()
         git(upstream, 'init', '-q')
@@ -120,7 +122,7 @@ class ProducerTest(unittest.TestCase):
         self.assertTrue((self.work / 'backports.tar.gz').is_file())
         self.assertEqual(git(self.root, 'status', '--porcelain'), '')
         self.assertFalse((self.root / 'init.sh').exists())
-        self.assertFalse((self.root / 'patch.sh').exists())
+        self.assertFalse((self.root / 'patches/patch.sh').exists())
 
     def test_toolchain_export_across_filesystems(self):
         from unittest.mock import patch

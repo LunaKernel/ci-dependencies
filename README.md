@@ -4,7 +4,7 @@
 
 ## 制作与审计
 
-在 Linux 上准备 Bash、Git、Python 3.12+、curl、zstd 和常用 GNU 工具。主项目输入使用固定提交的 LF 检出；`.env`、回移清单和项目适配补丁必须匹配该提交。制作代码从该输入引用 `tools/ci_dependencies.py` 的 v1 协议、`tools/backport_manifest.sh` 的纯函数库与 `tools/tree_sha256.py`。
+在 Linux 上准备 Bash、Git、Python 3.12+、curl、zstd 和常用 GNU 工具。主项目输入使用固定提交的 LF 检出；`.env`、回移清单和项目适配补丁必须匹配该提交。制作代码从该输入引用 `tools/ci_dependencies.py` 的 v1 协议、`patches/backport_manifest.sh` 的纯函数库与 `tools/tree_sha256.py`。
 
 ```bash
 project=/path/to/android_kernel_xiaomi_sm8850

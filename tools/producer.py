@@ -36,7 +36,7 @@ def run_git(repo, *args):
 
 
 def producer_record(root):
-    files = ('tools/backport_manifest.sh', 'tools/ci_dependencies.py', 'tools/tree_sha256.py')
+    files = ('patches/backport_manifest.sh', 'tools/ci_dependencies.py', 'tools/tree_sha256.py')
     return {'project_commit': os.environ['PROJECT_COMMIT'],
             'files': {name: sha256(root / name) for name in files},
             'dependency_commit': run_git(TOOLS.parent, 'rev-parse', 'HEAD').decode().strip(),

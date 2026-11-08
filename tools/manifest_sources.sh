@@ -3,7 +3,7 @@ set -euo pipefail
 TOOLS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 . "${TOOLS_DIR}/context.sh"
 load_context
-BACKPORT_MANIFEST_LIBRARY=1 . "${PROJECT_DIR}/tools/backport_manifest.sh"
+BACKPORT_MANIFEST_LIBRARY=1 . "${PROJECT_DIR}/patches/backport_manifest.sh"
 . "${TOOLS_DIR}/source_audit.sh"
 . "${TOOLS_DIR}/manifest_batch.sh"
 
