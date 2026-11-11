@@ -29,12 +29,12 @@ bash tools/audit_sources.sh --project "$project" --project-commit "$commit" --wo
 
 ## 固定版本
 
-回移 Release：`ci-deps-v1-6a2ba0f`，制作输入为主项目固定提交 [`6a2ba0fff2ee0b086d82983c148c7634e91cc6d0`](https://github.com/LunaKernel/android_kernel_xiaomi_sm8850/tree/6a2ba0fff2ee0b086d82983c148c7634e91cc6d0)，制作代码为本仓库 `5ecf733b45ce6764c1de48c1c753bed510481f12`。工具链继续使用 `ci-deps-v1-3fc59ff`。现有 Release 的 manifest、provenance 和摘要保留原始身份。使用精确版本 URL。
+回移 Release：`ci-deps-v1-247b450`，制作输入为主项目固定提交 [`247b4508c648e2f18e91cc055708b2b5aff2d325`](https://github.com/LunaKernel/android_kernel_xiaomi_sm8850/tree/247b4508c648e2f18e91cc055708b2b5aff2d325)，制作代码为本仓库 `626d21a1d8b1704501074720bc4afc2931f5cd15`。工具链继续使用 `ci-deps-v1-3fc59ff`。现有 Release 的 manifest、provenance 和摘要保留原始身份。使用精确版本 URL。
 
 | 文件 | SHA-256 |
 | --- | --- |
-| `backports.tar.gz` | `8b7e1ecf7b13cfbcfe29d8a69507692580f0b75d87b42ab740deaaf49e5fdfb7` |
-| `backports-manifest.json` | `c18c0affca087fb9a2667f3467f176bc0caa58fbb6e9d48c3b78af8a9739b278` |
+| `backports.tar.gz` | `f06dd143a7aa56fdeb41fc45ff48ccd42b595b648808409287387852a1f769ff` |
+| `backports-manifest.json` | `c8d85a5f8f5b6e893612e31cce4925e010fd296ce6ed5da23a7f375a8bc85c2f` |
 | `toolchain.tar.zst` | `65e911abbba148cac0d81f2678f1a4282da513f8f7004e8cc263bdaccc573fe6` |
 
 工具链安装树 SHA-256：`9ac803933946fd3dff326f8da8853fc5b23ae7da613f6ceb611d8cc5587bf985`。归档与安装树分别校验。
