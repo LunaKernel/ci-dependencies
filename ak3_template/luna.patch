@@ -107,18 +107,19 @@
  
  ### AnyKernel install
  ## boot files attributes
-@@ -29,34 +48,45 @@
+@@ -29,34 +48,44 @@
  } # end attributes
  
  # boot shell variables
 -BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;
 -IS_SLOT_DEVICE=0;
+-RAMDISK_COMPRESSION=auto;
+-PATCH_VBMETA_FLAG=auto;
 +BLOCK=/dev/block/by-name/boot;
 +IS_SLOT_DEVICE=1;
 +SLOT_SELECT=active;
 +boot_partition_size=100663296;
- RAMDISK_COMPRESSION=auto;
- PATCH_VBMETA_FLAG=auto;
++LUNA_IMAGE_ONLY=1;
  
  # import functions/variables and setup patching - see for reference (DO NOT REMOVE)
  . tools/ak3-core.sh;
@@ -167,7 +168,7 @@
  ## end boot install
  
  
-@@ -118,4 +148,3 @@
+@@ -118,4 +147,3 @@
  
  #write_boot; # use flash_boot to skip ramdisk repack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot
  ## end vendor_boot install
@@ -215,8 +216,43 @@
  }
  ###
  
-@@ -510,9 +544,8 @@
+@@ -88,7 +122,10 @@
  
+   mkdir -p $SPLITIMG;
+   cd $SPLITIMG;
+-  if [ -f "$BIN/unpackelf" ] && unpackelf -i $BOOTIMG -h -q 2>/dev/null; then
++  if [ "$LUNA_IMAGE_ONLY" = 1 ]; then
++    magiskboot unpack -n "$BOOTIMG" || abort "Splitting boot image failed. Aborting...";
++    [ -s kernel ] || abort "No kernel found in boot image. Aborting...";
++  elif [ -f "$BIN/unpackelf" ] && unpackelf -i $BOOTIMG -h -q 2>/dev/null; then
+     if [ -f "$BIN/elftool" ]; then
+       mkdir elftool_out;
+       elftool unpack -i $BOOTIMG -o elftool_out;
+@@ -313,6 +350,16 @@
+ flash_boot() {
+   local varlist i kernel ramdisk fdt cmdline comp part0 part1 vndrname needskernelpatch nocompflag signfail pk8 cert avbtype;
+
++  if [ "$LUNA_IMAGE_ONLY" = 1 ]; then
++    cd "$SPLITIMG" || abort "Cannot access split boot image. Aborting...";
++    [ -s "$AKHOME/Image" ] && cp -f "$AKHOME/Image" kernel || abort "Cannot stage replacement Image. Aborting...";
++    # Preserve the raw unpacked components without AK3 customization or vbmeta flag changes.
++    PATCHVBMETAFLAG=false magiskboot repack -n "$BOOTIMG" "$AKHOME/boot-new.img" || \
++      abort "Repacking boot image failed. Aborting...";
++    flash_boot_image;
++    return;
++  fi;
++
+   cd $SPLITIMG;
+   if [ -f "$BIN/mkimage" ]; then
+     varlist="name arch os type comp addr ep";
+@@ -508,11 +555,14 @@
+   fi;
+   mv -f boot-new-signed.img boot-new.img 2>/dev/null;
++  flash_boot_image;
++}
+
++flash_boot_image() {
++  cd "$AKHOME" || abort "Cannot access repacked boot image. Aborting...";
    if [ ! -f boot-new.img ]; then
      abort "No repacked image found to flash. Aborting...";
 -  elif [ "$(wc -c < boot-new.img)" -gt "$(wc -c < boot.img)" ]; then
@@ -227,7 +263,7 @@
    blockdev --setrw $BLOCK 2>/dev/null;
    if [ -f "$BIN/flash_erase" -a -f "$BIN/nandwrite" ]; then
      flash_erase $BLOCK 0 0;
-@@ -881,14 +914,7 @@
+@@ -881,14 +931,7 @@
    # slot detection enabled by IS_SLOT_DEVICE=1 or auto (from anykernel.sh)
    case $IS_SLOT_DEVICE in
      1|auto)
